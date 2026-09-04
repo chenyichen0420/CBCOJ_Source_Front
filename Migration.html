@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="color-scheme" content="light dark">
+    <title>Migration</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.0/github-markdown.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        /* ========== 全局主题变量 ========== */
+        :root {
+            color-scheme: light dark;
+            --bg-body: #f6f8fa;
+            --bg-card: #ffffff;
+            --text-primary: #24292f;
+            --text-secondary: #57606a;
+            --border-light: #e1e4e8;
+            --code-bg: #f6f8fa;
+            --code-header-bg: #f1f3f5;
+            --code-header-border: #e1e4e8;
+            --btn-bg: #ffffff;
+            --btn-border: #d0d7de;
+            --btn-hover-bg: #eaeef2;
+            --shadow: 0 1px 4px rgba(0,0,0,0.1);
+            --code-text: #24292f;
+            --line-numbers-color: #8c959f;
+            
+            
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-body: #0d1117;
+                --bg-card: #161b22;
+                --text-primary: #c9d1d9;
+                --text-secondary: #8b949e;
+                --border-light: #30363d;
+                --code-bg: #0d1117;
+                --code-header-bg: #21262d;
+                --code-header-border: #30363d;
+                --btn-bg: #21262d;
+                --btn-border: #30363d;
+                --btn-hover-bg: #30363d;
+                --shadow: 0 1px 4px rgba(0,0,0,0.3);
+                --code-text: #c9d1d9;
+                --line-numbers-color: #8b949e;
+                
+                
+            }
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            padding: 2rem;
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+        }
+        
+        
+        .markdown-body {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+        .markdown-body {
+            color: var(--text-primary) !important;
+        }
+        .code-content pre code,
+        .code-content pre code.hljs {
+            color: var(--code-text) !important;
+            background-color: var(--code-bg) !important;
+        }
+        .line-numbers {
+            color: var(--line-numbers-color) !important;
+            background-color: var(--code-bg) !important;
+        }
+        .code-wrapper {
+            margin: 1rem 0;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border-light);
+        }
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            background-color: var(--code-header-bg);
+            padding: 0.4rem 1rem;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--code-header-border);
+        }
+        .code-lang {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .copy-btn {
+            background-color: var(--btn-bg);
+            border: 1px solid var(--btn-border);
+            border-radius: 6px;
+            padding: 0.2rem 0.6rem;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+        .copy-btn:hover { background-color: var(--btn-hover-bg); }
+        .copy-btn.copied {
+            background: #2cbe4e;
+            border-color: #2cbe4e;
+            color: white;
+        }
+        .code-content pre {
+            margin: 0 !important;
+            border-radius: 0 !important;
+            background-color: var(--code-bg) !important;
+            overflow-x: auto;
+            padding: 10px;
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+        .code-content pre code {
+            padding: 0 !important;
+            tab-size: 4;
+            -moz-tab-size: 4;
+        }
+        .footer {
+            max-width: 1200px;
+            margin: 2rem auto 0;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-light);
+            padding: 1.5rem 0;
+        }
+        .footer a {
+            color: #0969da;
+            text-decoration: none;
+        }
+        .katex-display { overflow-x: auto; }
+        .katex-error {
+            color: #dc2626;
+            background: #fef2f2;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+        @media (max-width: 768px) {
+            .markdown-body { padding: 1rem; }
+            
+        }
+    </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {
+        delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}],
+        ignoredTags: ['pre', 'code', 'script', 'style', 'textarea'],
+        ignoredClasses: ['code-wrapper', 'line-numbers', 'copy-btn']
+    });"></script>
+</head>
+<body>
+<div class="">
+    <div class="main-content">
+        
+        <div class="markdown-body"><h1 id="cbcoj-中间件迁移-完整改造方案">CBCOJ 中间件迁移 —— 完整改造方案</h1>
+<hr>
+<h2 id="一概述">一、概述</h2>
+<p>本文档提供将 LZJOJ 前端（Node.js + Express + EJS + MySQL）改造为对接 <strong>CBCOJ 中间件</strong>（C++ 二进制协议服务）的完整迁移方案，并包含一个 Node.js 适配层。</p>
+<p><strong>核心目标</strong>：保留所有 EJS 渲染和前端逻辑；将全部数据库操作（<code>pool.query</code>）替换为对 CBCOJ 中间件的调用。以下独立模块保留在本地：</p>
+<ul>
+<li>讨论区（<code>discussions</code> / <code>replies</code>）</li>
+<li>私信（<code>messages</code>）</li>
+<li>网盘（<code>disk_files</code>）</li>
+<li>IP 封禁（<code>banned_ips</code>）</li>
+<li>用户个人主页（<code>user_profiles</code>）</li>
+<li>日志（<code>log_access</code>、<code>log_security</code>、<code>log_runtime</code>）</li>
+</ul>
+<hr>
+<h2 id="二优先级定义">二、优先级定义</h2>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>P0</strong></td>
+<td>核心功能，必须工作，否则 OJ 无法使用</td>
+</tr>
+<tr>
+<td><strong>P1</strong></td>
+<td>重要功能，用户期望但可暂时缺失</td>
+</tr>
+<tr>
+<td><strong>P2</strong></td>
+<td>锦上添花，可延后实现或保持独立</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="三模块改造总览">三、模块改造总览</h2>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>源文件</th>
+<th>改造方式</th>
+<th>优先级</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户认证与登录</td>
+<td><code>routes/user.js</code></td>
+<td>对接中间件</td>
+<td><strong>P0</strong></td>
+<td>登录/注册/Cookie 验证完全由中间件接管</td>
+</tr>
+<tr>
+<td>评测提交与结果</td>
+<td><code>routes/academic.js</code></td>
+<td>对接中间件</td>
+<td><strong>P0</strong></td>
+<td>提交代码、查询记录由中间件处理</td>
+</tr>
+<tr>
+<td>题目列表与详情</td>
+<td><code>app.js</code> + <code>routes/academic.js</code></td>
+<td>对接中间件</td>
+<td><strong>P0</strong></td>
+<td>题库浏览是 OJ 最基础功能</td>
+</tr>
+<tr>
+<td>题目管理（CRUD）</td>
+<td><code>routes/admin.js</code> + <code>routes/user.js</code></td>
+<td>对接中间件</td>
+<td><strong>P1</strong></td>
+<td>管理员创建/编辑题目</td>
+</tr>
+<tr>
+<td>比赛管理</td>
+<td><code>routes/contest.js</code> + <code>routes/admin.js</code></td>
+<td>对接中间件</td>
+<td><strong>P1</strong></td>
+<td>比赛列表、详情、提交、排名</td>
+</tr>
+<tr>
+<td>用户信息与设置</td>
+<td><code>routes/user.js</code></td>
+<td>对接中间件</td>
+<td><strong>P1</strong></td>
+<td>个人资料、签名、公开代码开关</td>
+</tr>
+<tr>
+<td>个人主页</td>
+<td><code>routes/profile.js</code></td>
+<td><strong>独立保留</strong></td>
+<td><strong>P1</strong></td>
+<td>Markdown 内容存本地数据库</td>
+</tr>
+<tr>
+<td>讨论区</td>
+<td><code>routes/community.js</code></td>
+<td><strong>独立保留</strong></td>
+<td><strong>P2</strong></td>
+<td>中间件无此功能，独立实现</td>
+</tr>
+<tr>
+<td>私信</td>
+<td><code>routes/community.js</code></td>
+<td><strong>独立保留</strong></td>
+<td><strong>P2</strong></td>
+<td>中间件无此功能，独立实现</td>
+</tr>
+<tr>
+<td>网盘</td>
+<td><code>routes/disk.js</code></td>
+<td><strong>独立保留</strong></td>
+<td><strong>P2</strong></td>
+<td>中间件无此功能，独立实现</td>
+</tr>
+<tr>
+<td>管理员日志</td>
+<td><code>routes/admin.js</code></td>
+<td><strong>独立保留</strong></td>
+<td><strong>P2</strong></td>
+<td>中间件日志不结构化</td>
+</tr>
+<tr>
+<td>IP 封禁</td>
+<td><code>app.js</code> 中间件 + <code>routes/admin.js</code></td>
+<td><strong>独立保留</strong></td>
+<td><strong>P2</strong></td>
+<td>Web 层独立维护</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="四模块详细改造清单">四、模块详细改造清单</h2>
+<h3 id="模块-1用户认证与登录p0">模块 1：用户认证与登录（P0）</h3>
+<p><strong>源文件</strong>：<code>routes/user.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+<th>中间件命令</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/login</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>users</code> 表</td>
+<td>对接中间件</td>
+<td>Account Service <code>L</code></td>
+</tr>
+<tr>
+<td><code>/verifycookie</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>users.cookie</code></td>
+<td>对接中间件</td>
+<td>Account Service <code>V</code></td>
+</tr>
+<tr>
+<td><code>/genregtoken</code></td>
+<td>GET</td>
+<td>SQL INSERT <code>register_tokens</code> + 发邮件</td>
+<td>对接中间件</td>
+<td>Account Service <code>P</code>（pre-register）</td>
+</tr>
+<tr>
+<td><code>/verifycode</code></td>
+<td>GET</td>
+<td>SQL 查询 + INSERT <code>users</code></td>
+<td>对接中间件</td>
+<td>Account Service <code>R</code>（register）</td>
+</tr>
+<tr>
+<td><code>/mypermissions</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>user_permissions</code></td>
+<td>对接中间件</td>
+<td><code>accmng</code> 解析 <code>flag</code> 字段</td>
+</tr>
+<tr>
+<td><code>/getinfoshort</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>users</code></td>
+<td>对接中间件</td>
+<td><code>accmng.get_safe</code> + <code>ache</code></td>
+</tr>
+<tr>
+<td><code>/updinfoshort</code></td>
+<td>POST</td>
+<td>SQL UPDATE <code>users</code></td>
+<td>对接中间件</td>
+<td>Account Service <code>S</code> / <code>1</code> / <code>2</code></td>
+</tr>
+<tr>
+<td><code>/upload-avatar</code></td>
+<td>POST</td>
+<td>文件写入</td>
+<td><strong>保留独立</strong></td>
+<td>与中间件无关</td>
+</tr>
+<tr>
+<td><code>/avatar/:username</code></td>
+<td>GET</td>
+<td>静态文件 / SVG</td>
+<td><strong>保留独立</strong></td>
+<td>与中间件无关</td>
+</tr>
+</tbody></table>
+<p><strong>需要移除的代码</strong>：</p>
+<ul>
+<li><code>users</code> 表相关 SQL（<code>SELECT ... WHERE username=? AND password=?</code>）</li>
+<li><code>register_tokens</code> 表 SQL</li>
+<li><code>user_permissions</code> 表 SQL</li>
+<li>本地密码哈希逻辑</li>
+</ul>
+<p><strong>需要保留的代码</strong>：</p>
+<ul>
+<li>头像上传/获取逻辑（文件系统）</li>
+<li>Cookie 的 HTTP 传输逻辑（<code>res.cookie</code> / <code>req.cookies</code>）</li>
+</ul>
+<p><strong>适配层需要实现</strong>：</p>
+<div class="code-wrapper">
+<div class="code-header">
+    <span class="code-lang">JAVASCRIPT</span>
+    <button class="copy-btn" data-code="// adapter/account.js
+login(username, password)   // → L 命令
+verifyCookie(cookie)        // → V 命令
+preRegister(email, username, password) // → P 命令
+register(token, code)       // → R 命令
+getUserInfo(uid)            // → accmng.get_safe + 个人字段
+updateUserInfo(uid, fields) // → S / 1 / 2 命令
+getPermissions(uid)         // → 解析 flag 位
+">复制</button>
+</div>
+<div class="code-content">
+    <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/account.js</span>
+<span class="hljs-title function_">login</span>(username, password)   <span class="hljs-comment">// → L 命令</span>
+<span class="hljs-title function_">verifyCookie</span>(cookie)        <span class="hljs-comment">// → V 命令</span>
+<span class="hljs-title function_">preRegister</span>(email, username, password) <span class="hljs-comment">// → P 命令</span>
+<span class="hljs-title function_">register</span>(token, code)       <span class="hljs-comment">// → R 命令</span>
+<span class="hljs-title function_">getUserInfo</span>(uid)            <span class="hljs-comment">// → accmng.get_safe + 个人字段</span>
+<span class="hljs-title function_">updateUserInfo</span>(uid, fields) <span class="hljs-comment">// → S / 1 / 2 命令</span>
+<span class="hljs-title function_">getPermissions</span>(uid)         <span class="hljs-comment">// → 解析 flag 位</span>
+</code></pre>
+</div>
+</div>
+<hr>
+<h3 id="模块-2评测提交与结果p0">模块 2：评测提交与结果（P0）</h3>
+<p><strong>源文件</strong>：<code>routes/academic.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+<th>中间件命令</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/submit</code></td>
+<td>POST</td>
+<td>保存代码 → 编译 → 写入 <code>submissions</code> + <code>tasks</code></td>
+<td>对接中间件</td>
+<td>Judge Service <code>S</code></td>
+</tr>
+<tr>
+<td><code>/record</code></td>
+<td>GET</td>
+<td>SQL JOIN <code>submissions</code> + <code>results</code></td>
+<td>对接中间件</td>
+<td>Judge Service <code>Q</code></td>
+</tr>
+<tr>
+<td><code>/recordlist</code></td>
+<td>GET</td>
+<td>SQL JOIN 分页查询</td>
+<td>对接中间件</td>
+<td><code>recmng.query_page</code></td>
+</tr>
+<tr>
+<td><code>/getproblem</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>problems</code></td>
+<td>对接中间件</td>
+<td><code>promng</code></td>
+</tr>
+<tr>
+<td><code>/getproblemlist</code></td>
+<td>POST</td>
+<td>SQL 分页查询</td>
+<td>对接中间件</td>
+<td><code>promng</code></td>
+</tr>
+</tbody></table>
+<p><strong>需要移除的代码</strong>：</p>
+<ul>
+<li><code>submissions</code> 表 SQL（INSERT / SELECT / JOIN）</li>
+<li><code>results</code> 表 SQL</li>
+<li><code>tasks</code> 表 SQL</li>
+<li>本地编译逻辑（<code>compileCode</code> 函数）</li>
+<li>代码文件保存逻辑（<code>saveCodeFile</code> 函数）</li>
+<li><code>finalizer</code> 定时器（聚合评测结果）</li>
+</ul>
+<p><strong>需要保留的代码</strong>：</p>
+<ul>
+<li>无（整个评测流程完全由中间件接管）</li>
+</ul>
+<p><strong>适配层需要实现</strong>：</p>
+<div class="code-wrapper">
+<div class="code-header">
+    <span class="code-lang">JAVASCRIPT</span>
+    <button class="copy-btn" data-code="// adapter/judge.js
+submit(pid, uid, cid, language, code)  // → S 命令，返回 rid
+getResult(rid, uid)                    // → Q 命令，返回 overview + detail + code
+getRecordList(uid, pid, page)          // → recmng.query_page
+getProblem(pid)                        // → promng
+getProblemList(page)                   // → promng
+">复制</button>
+</div>
+<div class="code-content">
+    <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/judge.js</span>
+<span class="hljs-title function_">submit</span>(pid, uid, cid, language, code)  <span class="hljs-comment">// → S 命令，返回 rid</span>
+<span class="hljs-title function_">getResult</span>(rid, uid)                    <span class="hljs-comment">// → Q 命令，返回 overview + detail + code</span>
+<span class="hljs-title function_">getRecordList</span>(uid, pid, page)          <span class="hljs-comment">// → recmng.query_page</span>
+<span class="hljs-title function_">getProblem</span>(pid)                        <span class="hljs-comment">// → promng</span>
+<span class="hljs-title function_">getProblemList</span>(page)                   <span class="hljs-comment">// → promng</span>
+</code></pre>
+</div>
+</div>
+<p><strong>特别注意</strong>：</p>
+<ul>
+<li>原项目中的 <code>compileCode</code> 函数<strong>必须废弃</strong>，因为 CBCOJ 中间件的评测机在远端完成编译。</li>
+<li><code>tasks</code> 表不再需要，由中间件的 <code>submng</code> 队列接管。</li>
+<li><code>finalizer</code> 定时器不再需要，由中间件的 <code>recmng</code> 统一管理。</li>
+</ul>
+<hr>
+<h3 id="模块-3题目列表与详情p0">模块 3：题目列表与详情（P0）</h3>
+<p><strong>源文件</strong>：<code>app.js</code>（页面路由）</p>
+<table>
+<thead>
+<tr>
+<th>路由</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+<th>数据来源</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/problem/list</code></td>
+<td>GET</td>
+<td>SQL 分页查询 <code>problems</code></td>
+<td>对接中间件</td>
+<td><code>promng</code></td>
+</tr>
+<tr>
+<td><code>/problem/:pid</code></td>
+<td>GET</td>
+<td>SQL 查询单个 <code>problems</code></td>
+<td>对接中间件</td>
+<td><code>promng</code></td>
+</tr>
+<tr>
+<td><code>/problem/me</code></td>
+<td>GET</td>
+<td>SQL 按作者筛选</td>
+<td>对接中间件</td>
+<td><code>promng</code> 按作者过滤</td>
+</tr>
+</tbody></table>
+<p><strong>需要移除的代码</strong>：</p>
+<ul>
+<li><code>problems</code> 表 SQL 查询</li>
+</ul>
+<p><strong>需要保留的代码</strong>：</p>
+<ul>
+<li>EJS 模板渲染逻辑（<code>res.render(&#39;problemlist&#39;, ...)</code>）</li>
+<li>分页参数解析</li>
+</ul>
+<p><strong>适配层需要实现</strong>：</p>
+<div class="code-wrapper">
+<div class="code-header">
+    <span class="code-lang">JAVASCRIPT</span>
+    <button class="copy-btn" data-code="// adapter/problem.js
+getProblemList(page, perPage, filter)   // 分页获取题目列表
+getProblem(pid)                         // 获取单个题目详情
+getMyProblems(username, page)           // 获取当前用户创建的题目
+">复制</button>
+</div>
+<div class="code-content">
+    <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/problem.js</span>
+<span class="hljs-title function_">getProblemList</span>(page, perPage, filter)   <span class="hljs-comment">// 分页获取题目列表</span>
+<span class="hljs-title function_">getProblem</span>(pid)                         <span class="hljs-comment">// 获取单个题目详情</span>
+<span class="hljs-title function_">getMyProblems</span>(username, page)           <span class="hljs-comment">// 获取当前用户创建的题目</span>
+</code></pre>
+</div>
+</div>
+<hr>
+<h3 id="模块-4题目管理p1">模块 4：题目管理（P1）</h3>
+<p><strong>源文件</strong>：<code>routes/admin.js</code> + <code>routes/user.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+<th>中间件命令</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/admin/problem</code></td>
+<td>POST</td>
+<td>SQL INSERT <code>problems</code></td>
+<td>对接中间件</td>
+<td><code>promng</code> 创建题目</td>
+</tr>
+<tr>
+<td><code>/admin/problem/:id</code></td>
+<td>PUT</td>
+<td>SQL UPDATE <code>problems</code></td>
+<td>对接中间件</td>
+<td><code>promng</code> 更新题目</td>
+</tr>
+<tr>
+<td><code>/admin/problem/:id</code></td>
+<td>DELETE</td>
+<td>SQL DELETE <code>problems</code></td>
+<td>对接中间件</td>
+<td><code>promng</code> 删除题目</td>
+</tr>
+<tr>
+<td><code>/admin/problem/:id/upload-data</code></td>
+<td>POST</td>
+<td>ZIP 解压 + SQL UPDATE</td>
+<td>对接中间件</td>
+<td>多信道文件上传协议</td>
+</tr>
+<tr>
+<td><code>/admin/problem/:id/upload-checker</code></td>
+<td>POST</td>
+<td>编译 + SQL UPDATE</td>
+<td>对接中间件</td>
+<td>多信道文件上传协议</td>
+</tr>
+<tr>
+<td><code>/admin/problem/:id/select</code></td>
+<td>PUT</td>
+<td>SQL UPDATE <code>selected</code></td>
+<td>对接中间件</td>
+<td><code>promng</code> 更新精选状态</td>
+</tr>
+<tr>
+<td><code>/problem/edit/:pid</code></td>
+<td>GET</td>
+<td>SQL 查询 + EJS 渲染</td>
+<td>对接中间件</td>
+<td><code>promng</code> 获取题目数据</td>
+</tr>
+<tr>
+<td><code>/problem/edit</code></td>
+<td>POST</td>
+<td>SQL UPDATE</td>
+<td>对接中间件</td>
+<td><code>promng</code> 更新题目</td>
+</tr>
+</tbody></table>
+<p><strong>需要移除的代码</strong>：</p>
+<ul>
+<li><code>problems</code> 表 CRUD 操作</li>
+<li>本地 ZIP 解压逻辑（<code>AdmZip</code>）</li>
+<li>本地 Checker 编译逻辑（<code>execPromise</code>）</li>
+</ul>
+<p><strong>需要保留的代码</strong>：</p>
+<ul>
+<li>文件上传的 Multer 配置（作为 HTTP 入口，但最终转发给中间件）</li>
+<li>EJS 编辑页面渲染</li>
+</ul>
+<p><strong>适配层需要实现</strong>：</p>
+<div class="code-wrapper">
+<div class="code-header">
+    <span class="code-lang">JAVASCRIPT</span>
+    <button class="copy-btn" data-code="// adapter/problem.js（扩展）
+createProblem(data)                     // 创建题目
+updateProblem(id, data)                 // 更新题目
+deleteProblem(id)                       // 删除题目
+uploadProblemData(pid, zipBuffer)       // 多信道上传数据包
+uploadChecker(pid, cppBuffer)           // 多信道上传检查器
+setProblemSelected(id, selected)        // 设置精选状态
+">复制</button>
+</div>
+<div class="code-content">
+    <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/problem.js（扩展）</span>
+<span class="hljs-title function_">createProblem</span>(data)                     <span class="hljs-comment">// 创建题目</span>
+<span class="hljs-title function_">updateProblem</span>(id, data)                 <span class="hljs-comment">// 更新题目</span>
+<span class="hljs-title function_">deleteProblem</span>(id)                       <span class="hljs-comment">// 删除题目</span>
+<span class="hljs-title function_">uploadProblemData</span>(pid, zipBuffer)       <span class="hljs-comment">// 多信道上传数据包</span>
+<span class="hljs-title function_">uploadChecker</span>(pid, cppBuffer)           <span class="hljs-comment">// 多信道上传检查器</span>
+<span class="hljs-title function_">setProblemSelected</span>(id, selected)        <span class="hljs-comment">// 设置精选状态</span>
+</code></pre>
+</div>
+</div>
+<hr>
+<h3 id="模块-5比赛管理p1">模块 5：比赛管理（P1）</h3>
+<p><strong>源文件</strong>：<code>routes/contest.js</code> + <code>routes/admin.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+<th>中间件命令</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/contests</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>contests</code></td>
+<td>对接中间件</td>
+<td><code>conmng</code></td>
+</tr>
+<tr>
+<td><code>/contests/:id</code></td>
+<td>GET</td>
+<td>SQL JOIN <code>contests</code> + <code>contest_problems</code></td>
+<td>对接中间件</td>
+<td><code>conmng</code></td>
+</tr>
+<tr>
+<td><code>/contests/:id/rank</code></td>
+<td>GET</td>
+<td>SQL 统计排名</td>
+<td>对接中间件</td>
+<td><code>conmng</code> 排名接口</td>
+</tr>
+<tr>
+<td><code>/contests/:id/submit</code></td>
+<td>POST</td>
+<td>同普通提交 + <code>contest_id</code></td>
+<td>对接中间件</td>
+<td>Judge Service <code>S</code>（带 <code>cid</code>）</td>
+</tr>
+<tr>
+<td><code>/admin/contests</code></td>
+<td>GET/POST</td>
+<td>SQL 管理比赛</td>
+<td>对接中间件</td>
+<td><code>conmng</code>（需扩展）</td>
+</tr>
+</tbody></table>
+<p><strong>需要移除的代码</strong>：</p>
+<ul>
+<li><code>contests</code> 表 SQL</li>
+<li><code>contest_problems</code> 表 SQL</li>
+<li><code>contest_submissions</code> 表 SQL</li>
+</ul>
+<p><strong>适配层需要实现</strong>：</p>
+<div class="code-wrapper">
+<div class="code-header">
+    <span class="code-lang">JAVASCRIPT</span>
+    <button class="copy-btn" data-code="// adapter/contest.js
+getContestList(page)                    // 获取比赛列表
+getContestDetail(id)                    // 获取比赛详情
+getContestRank(id)                      // 获取比赛排名
+submitToContest(contestId, pid, uid, code, language) // 比赛提交
+createContest(data)                     // 创建比赛（管理）
+updateContest(id, data)                 // 更新比赛（管理）
+deleteContest(id)                       // 删除比赛（管理）
+">复制</button>
+</div>
+<div class="code-content">
+    <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/contest.js</span>
+<span class="hljs-title function_">getContestList</span>(page)                    <span class="hljs-comment">// 获取比赛列表</span>
+<span class="hljs-title function_">getContestDetail</span>(id)                    <span class="hljs-comment">// 获取比赛详情</span>
+<span class="hljs-title function_">getContestRank</span>(id)                      <span class="hljs-comment">// 获取比赛排名</span>
+<span class="hljs-title function_">submitToContest</span>(contestId, pid, uid, code, language) <span class="hljs-comment">// 比赛提交</span>
+<span class="hljs-title function_">createContest</span>(data)                     <span class="hljs-comment">// 创建比赛（管理）</span>
+<span class="hljs-title function_">updateContest</span>(id, data)                 <span class="hljs-comment">// 更新比赛（管理）</span>
+<span class="hljs-title function_">deleteContest</span>(id)                       <span class="hljs-comment">// 删除比赛（管理）</span>
+</code></pre>
+</div>
+</div>
+<hr>
+<h3 id="模块-6用户信息与设置p1">模块 6：用户信息与设置（P1）</h3>
+<p><strong>源文件</strong>：<code>routes/user.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+<th>中间件命令</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/updinfoshort</code></td>
+<td>POST</td>
+<td>SQL UPDATE <code>users</code></td>
+<td>对接中间件</td>
+<td>Account Service <code>S</code> / <code>1</code> / <code>2</code></td>
+</tr>
+<tr>
+<td><code>/settings</code></td>
+<td>GET</td>
+<td>EJS 渲染</td>
+<td>对接中间件</td>
+<td><code>accmng</code> 获取用户数据</td>
+</tr>
+</tbody></table>
+<p><strong>需要移除的代码</strong>：</p>
+<ul>
+<li><code>users</code> 表的 UPDATE 操作</li>
+</ul>
+<p><strong>需要保留的代码</strong>：</p>
+<ul>
+<li>EJS 设置页面渲染</li>
+<li>表单提交的请求解析</li>
+</ul>
+<hr>
+<h3 id="模块-7个人主页p1独立保留">模块 7：个人主页（P1，独立保留）</h3>
+<p><strong>源文件</strong>：<code>routes/profile.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/profile/:username</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>user_profiles</code></td>
+<td><strong>独立保留</strong>（本地 SQLite/MySQL 表）</td>
+</tr>
+<tr>
+<td><code>/profile/edit</code></td>
+<td>POST</td>
+<td>SQL UPSERT <code>user_profiles</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+</tbody></table>
+<p><strong>说明</strong>：中间件无对应功能，个人主页的 Markdown 内容继续使用本地数据库（可复用原有 MySQL 表，或改用 SQLite）。</p>
+<hr>
+<h3 id="模块-8讨论区p2独立保留">模块 8：讨论区（P2，独立保留）</h3>
+<p><strong>源文件</strong>：<code>routes/community.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/getdisclist</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>discussions</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/getdisc</code></td>
+<td>GET</td>
+<td>SQL JOIN <code>discussions</code> + <code>replies</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/newdisc</code></td>
+<td>POST</td>
+<td>SQL INSERT <code>discussions</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/postdisc</code></td>
+<td>POST</td>
+<td>SQL INSERT <code>replies</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/reply/:id</code></td>
+<td>DELETE</td>
+<td>SQL DELETE <code>replies</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/discussion/:id</code></td>
+<td>DELETE</td>
+<td>SQL DELETE <code>discussions</code> + <code>replies</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+</tbody></table>
+<p><strong>说明</strong>：使用本地数据库独立存储，与中间件无关。</p>
+<hr>
+<h3 id="模块-9私信p2独立保留">模块 9：私信（P2，独立保留）</h3>
+<p><strong>源文件</strong>：<code>routes/community.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/postmsg</code></td>
+<td>POST</td>
+<td>SQL INSERT <code>messages</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/getmsg</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>messages</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/getmessages</code></td>
+<td>POST</td>
+<td>SQL 查询（管理员）</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/conversations</code></td>
+<td>GET</td>
+<td>SQL 聚合查询</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/conversation</code></td>
+<td>GET</td>
+<td>SQL 双向查询</td>
+<td><strong>独立保留</strong></td>
+</tr>
+</tbody></table>
+<p><strong>说明</strong>：使用本地数据库独立存储。</p>
+<hr>
+<h3 id="模块-10网盘p2独立保留">模块 10：网盘（P2，独立保留）</h3>
+<p><strong>源文件</strong>：<code>routes/disk.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/quota</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>users.disk_quota</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/files</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>disk_files</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/upload</code></td>
+<td>POST</td>
+<td>文件保存 + SQL INSERT</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/file/:fileId</code></td>
+<td>DELETE</td>
+<td>文件删除 + SQL DELETE</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/download/:fileId</code></td>
+<td>GET</td>
+<td>流式返回</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/files</code></td>
+<td>GET</td>
+<td>SQL JOIN</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/quota/:userId</code></td>
+<td>PUT</td>
+<td>SQL UPDATE</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/file/:fileId</code></td>
+<td>DELETE</td>
+<td>文件删除 + SQL DELETE</td>
+<td><strong>独立保留</strong></td>
+</tr>
+</tbody></table>
+<p><strong>说明</strong>：使用本地文件系统 + 本地数据库独立存储。</p>
+<hr>
+<h3 id="模块-11管理员日志与封禁p2独立保留">模块 11：管理员日志与封禁（P2，独立保留）</h3>
+<p><strong>源文件</strong>：<code>routes/admin.js</code></p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>方法</th>
+<th>当前实现</th>
+<th>改造方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/admin/logs</code></td>
+<td>GET</td>
+<td>SQL 查询 <code>log_*</code> 表</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/ban-ip</code></td>
+<td>POST</td>
+<td>SQL INSERT <code>banned_ips</code></td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/banned-ips</code></td>
+<td>GET</td>
+<td>SQL 查询</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/ban-ip/:ip</code></td>
+<td>DELETE</td>
+<td>SQL DELETE</td>
+<td><strong>独立保留</strong></td>
+</tr>
+<tr>
+<td><code>/admin/clear-ip-logs</code></td>
+<td>POST</td>
+<td>SQL DELETE</td>
+<td><strong>独立保留</strong></td>
+</tr>
+</tbody></table>
+<p><strong>说明</strong>：日志和封禁功能是 Web 层的管理功能，与评测核心无关，全部独立保留。</p>
+<hr>
+<h2 id="五需要移除的组件汇总">五、需要移除的组件汇总</h2>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>位置</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>所有 <code>pool.query</code> 调用</td>
+<td>全部 <code>routes/*.js</code></td>
+<td>由中间件接管</td>
+</tr>
+<tr>
+<td><code>compileCode</code> 函数</td>
+<td><code>routes/academic.js</code></td>
+<td>评测机远端编译</td>
+</tr>
+<tr>
+<td><code>saveCodeFile</code> 函数</td>
+<td><code>routes/academic.js</code></td>
+<td>代码存储由中间件接管</td>
+</tr>
+<tr>
+<td><code>finalizer</code> 定时器</td>
+<td><code>app.js</code></td>
+<td>结果聚合由中间件接管</td>
+</tr>
+<tr>
+<td><code>tasks</code> 表相关逻辑</td>
+<td>全项目</td>
+<td>评测队列由 <code>submng</code> 接管</td>
+</tr>
+<tr>
+<td><code>submissions</code> / <code>results</code> 表</td>
+<td>全项目</td>
+<td>记录由 <code>recmng</code> 接管</td>
+</tr>
+<tr>
+<td><code>users</code> 表（认证部分）</td>
+<td>全项目</td>
+<td>账户由 <code>accmng</code> 接管</td>
+</tr>
+<tr>
+<td><code>problems</code> 表</td>
+<td>全项目</td>
+<td>题目由 <code>promng</code> 接管</td>
+</tr>
+<tr>
+<td><code>contests</code> / <code>contest_problems</code></td>
+<td>全项目</td>
+<td>比赛由 <code>conmng</code> 接管</td>
+</tr>
+<tr>
+<td><code>register_tokens</code> 表</td>
+<td>全项目</td>
+<td>注册流程由 <code>regmng</code> 接管</td>
+</tr>
+<tr>
+<td><code>user_permissions</code> 表</td>
+<td>全项目</td>
+<td>权限由 <code>flag</code> 位接管</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="六保留的独立组件汇总">六、保留的独立组件汇总</h2>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>存储方式</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>user_profiles</code> 表</td>
+<td>本地 MySQL/SQLite</td>
+<td>个人主页 Markdown</td>
+</tr>
+<tr>
+<td><code>discussions</code> / <code>replies</code> 表</td>
+<td>本地 MySQL/SQLite</td>
+<td>讨论区</td>
+</tr>
+<tr>
+<td><code>messages</code> 表</td>
+<td>本地 MySQL/SQLite</td>
+<td>私信</td>
+</tr>
+<tr>
+<td><code>disk_files</code> 表 + 文件系统</td>
+<td>本地 MySQL + 文件系统</td>
+<td>网盘</td>
+</tr>
+<tr>
+<td><code>banned_ips</code> 表</td>
+<td>本地 MySQL/SQLite</td>
+<td>IP 封禁</td>
+</tr>
+<tr>
+<td><code>log_access</code> / <code>log_security</code> / <code>log_runtime</code></td>
+<td>本地 MySQL</td>
+<td>日志</td>
+</tr>
+<tr>
+<td>头像文件</td>
+<td>本地文件系统</td>
+<td>头像存储</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="七适配层架构">七、适配层架构</h2>
+<pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│                         Express 路由层                              │
+│  app.js (页面渲染) + routes/*.js (API)                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                       适配层 (adapter/)                             │
+│  ┌─────────────┬─────────────┬─────────────┬─────────────────────┐│
+│  │ account.js  │ judge.js    │ problem.js  │ contest.js          ││
+│  │ (用户认证)   │ (评测提交)   │ (题目管理)   │ (比赛管理)          ││
+│  └─────────────┴─────────────┴─────────────┴─────────────────────┘│
+│                           │                                         │
+│  ┌───────────────────────▼───────────────────────────────────────┐│
+│  │                    client.js (TCP 协议封装)                    ││
+│  │   - 连接管理 (Account / Update / Judge / Hack 四服务)         ││
+│  │   - 二进制协议打包/解包                                        ││
+│  │   - 请求-响应映射 (seq 管理)                                   ││
+│  └───────────────────────────────────────────────────────────────┘│
+├─────────────────────────────────────────────────────────────────────┤
+│                      CBCOJ 中间件 (C++)                             │
+│   Account Server │ Update Server │ Judge Server │ Hack Server      │
+└─────────────────────────────────────────────────────────────────────┘
+
+独立模块 (不经过适配层):
+┌─────────────────────────────────────────────────────────────────────┐
+│  本地 MySQL/SQLite + 文件系统                                       │
+│  讨论区 │ 私信 │ 网盘 │ 个人主页 │ 日志 │ IP封禁 │ 头像             │
+└─────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<hr>
+<h2 id="八实施步骤">八、实施步骤</h2>
+<h3 id="第一阶段基础架构p0">第一阶段：基础架构（P0）</h3>
+<ol>
+<li><p><strong>创建适配层骨架</strong></p>
+<ul>
+<li><code>adapter/client.js</code> —— TCP 连接管理与协议封装</li>
+<li><code>adapter/account.js</code> —— 用户认证适配器</li>
+<li><code>adapter/judge.js</code> —— 评测提交适配器</li>
+<li><code>adapter/problem.js</code> —— 题目查询适配器</li>
+</ul>
+</li>
+<li><p><strong>改造用户认证模块</strong>（<code>routes/user.js</code>）</p>
+<ul>
+<li>登录 → <code>L</code> 命令</li>
+<li>Cookie 验证 → <code>V</code> 命令</li>
+<li>注册 → <code>P</code> + <code>R</code> 命令</li>
+</ul>
+</li>
+<li><p><strong>改造评测提交与查询</strong>（<code>routes/academic.js</code>）</p>
+<ul>
+<li>提交 → <code>S</code> 命令</li>
+<li>记录查询 → <code>Q</code> 命令</li>
+<li>记录列表 → <code>recmng.query_page</code></li>
+</ul>
+</li>
+<li><p><strong>改造题库浏览</strong>（<code>app.js</code> 页面路由）</p>
+<ul>
+<li><code>/problem/list</code> → <code>promng</code></li>
+<li><code>/problem/:pid</code> → <code>promng</code></li>
+</ul>
+</li>
+</ol>
+<h3 id="第二阶段核心管理功能p1">第二阶段：核心管理功能（P1）</h3>
+<ol start="5">
+<li><p><strong>改造题目管理</strong>（<code>routes/admin.js</code> + <code>routes/user.js</code>）</p>
+<ul>
+<li>创建/编辑/删除题目 → <code>promng</code></li>
+<li>数据包上传 → 多信道协议</li>
+</ul>
+</li>
+<li><p><strong>改造比赛模块</strong>（<code>routes/contest.js</code> + <code>routes/admin.js</code>）</p>
+<ul>
+<li>比赛列表/详情/排名 → <code>conmng</code></li>
+<li>比赛提交 → <code>S</code> 命令（带 <code>cid</code>）</li>
+</ul>
+</li>
+<li><p><strong>改造用户设置</strong>（<code>routes/user.js</code>）</p>
+<ul>
+<li>个人信息更新 → <code>S</code> / <code>1</code> / <code>2</code> 命令</li>
+</ul>
+</li>
+</ol>
+<h3 id="第三阶段独立模块保留p1-p2">第三阶段：独立模块保留（P1-P2）</h3>
+<ol start="8">
+<li><p><strong>保留个人主页</strong>（<code>routes/profile.js</code>）</p>
+<ul>
+<li>继续使用本地数据库</li>
+</ul>
+</li>
+<li><p><strong>保留讨论区</strong>（<code>routes/community.js</code>）</p>
+<ul>
+<li>继续使用本地数据库</li>
+</ul>
+</li>
+<li><p><strong>保留私信</strong>（<code>routes/community.js</code>）</p>
+<ul>
+<li>继续使用本地数据库</li>
+</ul>
+</li>
+<li><p><strong>保留网盘</strong>（<code>routes/disk.js</code>）</p>
+<ul>
+<li>继续使用本地文件系统 + 数据库</li>
+</ul>
+</li>
+<li><p><strong>保留日志与封禁</strong>（<code>routes/admin.js</code>）</p>
+<ul>
+<li>继续使用本地数据库</li>
+</ul>
+</li>
+</ol>
+<h3 id="第四阶段清理与优化">第四阶段：清理与优化</h3>
+<ol start="13">
+<li><p><strong>移除废弃代码</strong></p>
+<ul>
+<li>所有 <code>pool.query</code> 调用（除独立模块）</li>
+<li><code>compileCode</code>、<code>saveCodeFile</code> 函数</li>
+<li><code>finalizer</code> 定时器</li>
+<li><code>tasks</code> 表相关逻辑</li>
+</ul>
+</li>
+<li><p><strong>配置统一管理</strong></p>
+<ul>
+<li><code>config.js</code> 增加中间件连接配置</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="九风险与注意事项">九、风险与注意事项</h2>
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>影响</th>
+<th>缓解措施</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>中间件未提供部分查询接口</td>
+<td>P1/P2 功能受阻</td>
+<td>独立模块保留在本地</td>
+</tr>
+<tr>
+<td>二进制协议实现复杂</td>
+<td>开发周期延长</td>
+<td>充分参考 C++ 代码中的协议定义</td>
+</tr>
+<tr>
+<td>网络延迟增加</td>
+<td>页面响应变慢</td>
+<td>增加缓存层（Redis / 内存缓存）</td>
+</tr>
+<tr>
+<td>中间件服务不可用</td>
+<td>整个 OJ 不可用</td>
+<td>增加健康检查和降级逻辑</td>
+</tr>
+<tr>
+<td>权限模型差异</td>
+<td>权限判断错误</td>
+<td>在适配层建立 <code>flag</code> ↔ <code>permission</code> 映射表</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="十文件改动总览">十、文件改动总览</h2>
+<h3 id="新增文件">新增文件</h3>
+<pre><code>adapter/
+├── index.js          # 统一导出
+├── client.js         # TCP 协议封装
+├── account.js        # 用户认证适配器
+├── judge.js          # 评测提交适配器
+├── problem.js        # 题目管理适配器
+└── contest.js        # 比赛管理适配器
+</code></pre>
+<h3 id="修改文件">修改文件</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>改动程度</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>app.js</code></td>
+<td>中等</td>
+<td>页面路由中 <code>pool.query</code> → 适配器调用</td>
+</tr>
+<tr>
+<td><code>routes/user.js</code></td>
+<td><strong>大量</strong></td>
+<td>全部 SQL → 适配器调用</td>
+</tr>
+<tr>
+<td><code>routes/academic.js</code></td>
+<td><strong>大量</strong></td>
+<td>全部 SQL + 编译 → 适配器调用</td>
+</tr>
+<tr>
+<td><code>routes/admin.js</code></td>
+<td>中等</td>
+<td>管理接口 → 适配器调用</td>
+</tr>
+<tr>
+<td><code>routes/contest.js</code></td>
+<td>中等</td>
+<td>全部 SQL → 适配器调用</td>
+</tr>
+<tr>
+<td><code>routes/profile.js</code></td>
+<td><strong>少量</strong></td>
+<td>保持独立，无需修改</td>
+</tr>
+<tr>
+<td><code>routes/community.js</code></td>
+<td><strong>无</strong></td>
+<td>完全独立保留</td>
+</tr>
+<tr>
+<td><code>routes/disk.js</code></td>
+<td><strong>无</strong></td>
+<td>完全独立保留</td>
+</tr>
+<tr>
+<td><code>config.js</code></td>
+<td>少量</td>
+<td>增加中间件配置</td>
+</tr>
+</tbody></table>
+<h3 id="移除文件逻辑废弃">移除文件（逻辑废弃）</h3>
+<ul>
+<li>无完整文件移除，但 <code>routes/academic.js</code> 中的 <code>compileCode</code>、<code>saveCodeFile</code>、<code>finalizer</code> 相关代码被移除</li>
+</ul>
+<hr>
+<h2 id="十一验收标准">十一、验收标准</h2>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>验收标准</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户登录</td>
+<td>正确用户名密码返回 cookie</td>
+</tr>
+<tr>
+<td>用户注册</td>
+<td>邮箱验证码 → 创建用户成功</td>
+</tr>
+<tr>
+<td>提交代码</td>
+<td>返回 rid，状态为 <code>judging</code></td>
+</tr>
+<tr>
+<td>查询结果</td>
+<td>返回 overview + detail，源码 base64 正确</td>
+</tr>
+<tr>
+<td>题库列表</td>
+<td>分页正确，数据完整</td>
+</tr>
+<tr>
+<td>题目详情</td>
+<td>显示完整题目信息</td>
+</tr>
+<tr>
+<td>创建题目</td>
+<td>题目出现在列表中</td>
+</tr>
+<tr>
+<td>上传数据</td>
+<td>ZIP 解压成功，数据路径正确</td>
+</tr>
+<tr>
+<td>比赛列表</td>
+<td>显示已开始的比赛</td>
+</tr>
+<tr>
+<td>比赛提交</td>
+<td>成功提交，排名更新</td>
+</tr>
+</tbody></table>
+<hr>
+<p><em>文档版本: 1.0</em><br><em>最后更新: 2026.09.04</em></p>
+</div>
+        <div class="footer">
+            <p>© 2026 · 本文采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议</p>
+        </div>
+    </div>
+    
+</div>
+<script>
+(function() {
+    // 复制按钮
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const code = btn.getAttribute('data-code');
+            if (code) {
+                await navigator.clipboard.writeText(code);
+                const orig = btn.textContent;
+                btn.textContent = '已复制！';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+            }
+        });
+    });
+    
+    
+})();
+</script>
+</body>
+</html>

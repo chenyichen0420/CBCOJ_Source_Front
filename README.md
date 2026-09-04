@@ -1,6 +1,6 @@
 ## Intro
 
-this is a branch where CBC do his work.
+this is a branch where CBC do ~~her~~ works.
 
 CBCOJ Inherits LZJOJ's UI, but with a totally different backend service system.
 

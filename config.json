@@ -1,0 +1,17 @@
+{
+	"middleware": {
+		"host": "127.0.0.1",
+		"accountPort": 8640,
+		"hackPort": 8643,
+		"judgePort": 8641,
+		"requestTimeout": 3000,
+		"connectTimeout": 2000,
+		"maxRetries": 3,
+		"retryDelay": 500,
+		"sliceSize": 1048576,
+		"hackRetries": 3,
+		"timeWindow": 300,
+		"hackIdleTimeout": 1000,
+		"hackMaxChannels": 64
+	}
+}

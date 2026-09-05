@@ -13,56 +13,6 @@ const upload = multer();
 const { SUBMIT_ROOT, COMPILE_ROOT } = require('../config');
 const { validateInt, validateString } = require('../validation');
 
-/*
-Function: saveCodeFile
-Status: TO BE REMOVED (replaced by middleware)
-
-This function is no longer needed. Code storage and compilation are now handled by the middleware.
-*/
-async function saveCodeFile(base64Code, language, submitId) {
-    const code = Buffer.from(base64Code, 'base64').toString('utf-8');
-    const extMap = { c: '.c', cpp: '.cpp', python: '.py', java: '.java' };
-    const ext = extMap[language] || '.txt';
-    const filename = `${submitId}${ext}`;
-    const filePath = path.join(SUBMIT_ROOT, filename);
-    await fs.writeFile(filePath, code, 'utf8');
-    return filePath;
-}
-
-/*
-Function: compileCode
-Status: TO BE REMOVED (replaced by middleware)
-
-This function is no longer needed. Compilation is now performed by the middleware's judger.
-*/
-async function compileCode(srcPath, language, submitId) {
-    const outputPath = path.join(COMPILE_ROOT, `${submitId}`);
-    try {
-        if (language.startsWith('C')) {
-            const compiler = language.startsWith('C++') ? 'g++' : 'gcc';
-            var mode;
-            if (compiler === 'g++') {
-                mode = `-x c++ ${srcPath} -std=c++` + language[3] + language[4];
-            }
-            else {
-                mode = `-x c ${srcPath} -std=c` + language[1] + language[2];
-            }
-            if (language.endsWith('-O2')) {
-                mode += '-O2';
-            }
-            const cmd = `${compiler} -o ${outputPath} ${mode} -lm`;
-            await execPromise(cmd, { timeout: 10000 });
-            return outputPath;
-        } else if (language === 'python') {
-            return srcPath;
-        } else {
-            throw new Error('Unsupported language');
-        }
-    } catch (err) {
-        throw new Error(`Compilation error: ${(err.stderr || err.message).slice(0, 100)}`);
-    }
-}
-
 router.get('/getproblem', requireAdmin, async (req, res) => {
     const pid = req.query.pid;
     const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
@@ -200,8 +150,8 @@ module.exports = router;
 | `/submit` | 路由 | 替换整个路由逻辑 | 提交代码 → 完全由中间件接管 |
 | `/recordlist` | 路由 | 替换 `pool.query` | 获取用户提交记录 ID 列表 |
 | `/record` | 路由 | 替换 `pool.query` | 获取评测详情 |
-| `saveCodeFile` | 函数 | 标记为 **TO BE REMOVED** | 代码存储由中间件接管 |
-| `compileCode` | 函数 | 标记为 **TO BE REMOVED** | 编译由中间件的 Judger 接管 |
+| `saveCodeFile` | 函数 | 已经移除 | 代码存储由中间件接管 |
+| `compileCode` | 函数 | 已经移除 | 编译由中间件的 Judger 接管 |
 | `pool.query` 插入 `submissions` | SQL | 包含在 `/submit` 标注中 | 提交记录由中间件接管 |
 | `pool.query` 插入 `tasks` | SQL | 包含在 `/submit` 标注中 | 评测队列由中间件 `submng` 接管 |
 | `pool.query` 插入 `results` | SQL | 不再需要 | 结果由中间件 `recmng` 接管 |

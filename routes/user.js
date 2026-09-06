@@ -1,7 +1,7 @@
 const express = require('express');
 const sentemail = require('./email.js');
 const router = express.Router();
-const pool = require('../db');
+const { packParams, parsePack } = require('../db');
 const { getUserByCookie, requireLogin, requireAdmin, getUserPermissions } = require('../auth');
 const logger = require('../logger');
 const crypto = require('crypto');
@@ -27,7 +27,7 @@ router.get('/mypermissions', requireLogin, async (req, res) => {
     res.json({ status: 'Y', permissions: perms });
 });
 
-// 登录
+// ---------- 登录 ----------
 router.get('/login', async (req, res) => {
     const username = req.query.username, password = req.query.password;
     const ip = logger.getClientIp(req);
@@ -41,55 +41,71 @@ router.get('/login', async (req, res) => {
         await logger.logSecurity(null, null, ip, 'login_fail', null, 'Missing credentials');
         return res.json({ status: 'N', error: `password: ${pwErr}` });
     }
-    /*
-    DB Interface, waiting for implement
-
-    Input: username (string), password (string)
-    Output: { status: 'Y', cookie: string } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Validate username/password against account database
-    - On success: generate/return session cookie
-    - On failure: return error message
-    */
+    try {
+        const cookie = await pool.login(username, password);  // db.js 已实现 login
+        await logger.logSecurity(null, username, ip, 'login_success');
+        res.json({ status: 'Y', cookie });
+    } catch (err) {
+        await logger.logSecurity(null, username, ip, 'login_fail', null, err.message);
+        res.json({ status: 'N', error: err.message });
+    }
 });
 
-// 验证 cookie
+// ---------- 验证 cookie ----------
 router.get('/verifycookie', async (req, res) => {
     const cookie = req.query.cookie;
     const cErr = validateString(cookie, { minLen: 1, maxLen: 200 });
     if (cErr) return res.json({ status: 'N' });
-    /*
-    DB Interface, waiting for implement
-
-    Input: cookie (string)
-    Output: { status: 'Y' } | { status: 'N' }
-
-    Expected middleware behavior:
-    - Verify if cookie exists and is valid (not expired)
-    - Return Y if valid, N otherwise
-    */
+    try {
+        const user = await getUserByCookie(cookie);
+        res.json({ status: user ? 'Y' : 'N' });
+    } catch {
+        res.json({ status: 'N' });
+    }
 });
 
-// 获取用户信息（根据 cookie 或 uid）
+// ---------- 获取用户信息（支持 username / uid） ----------
 router.get('/getinfoshort', async (req, res) => {
     const key = req.query.key;
     const keyErr = validateString(key, { minLen: 1, maxLen: 200 });
     if (keyErr) return res.json({ status: 'N', error: `key: ${keyErr}` });
 
-    /*
-    DB Interface, waiting for implement
-
-    Input: key (string) — can be cookie, username, or uid
-    Output: { status: 'Y', uid, username, pubcode, slogan, role, badge, name_color } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Try key as cookie → lookup user
-    - Try key as username → lookup user
-    - Try key as uid (if numeric) → lookup user
-    - Return user info if found
-    - Fields: uid (int), username (string), pubcode (string), slogan (string), role (string), badge (string|null), name_color (string|null)
-    */
+    try {
+        const conn = pool.getAccount();
+        // 使用中间件 'U' 指令的 'any' 类型，自动识别 key 为 uid 或 username
+        const data = packParams(['any', key, 'uid', 'username', 'pubcode', 'slogan', 'role', 'badge', 'name_color']);
+        const resp = await conn.send('U', data);
+        if (resp.command !== 'Y') {
+            return res.json({ status: 'N', error: 'User not found' });
+        }
+        const parts = parsePack(resp.data);
+        if (parts.length < 8) {
+            return res.json({ status: 'N', error: 'Invalid response from middleware' });
+        }
+        const uid = parseInt(parts[0]);
+        if (isNaN(uid)) {
+            return res.json({ status: 'N', error: 'Invalid uid in response' });
+        }
+        // 处理字段：pubcode 为 "yes"/"no"，badge/name_color 可能为空字符串（转为 null 或保留）
+        const pubcode = parts[2] || '';
+        const slogan = parts[3] || '';
+        const role = parts[4] || 'user';
+        const badge = parts[5] || null;
+        const name_color = parts[6] || null;
+        res.json({
+            status: 'Y',
+            uid,
+            username: parts[1],
+            pubcode,
+            slogan,
+            role,
+            badge,
+            name_color
+        });
+    } catch (err) {
+        logger.logError(`getinfoshort failed for key ${key}: ${err.message}`, err);
+        res.json({ status: 'N', error: 'Database error' });
+    }
 });
 
 // 更新个人信息

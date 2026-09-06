@@ -1,66 +1,43 @@
 const pool = require('./db');
 
+/**
+ * 从 Cookie 获取用户信息
+ * @param {string} cookie - 用户 cookie
+ * @returns {Promise<{ id: number, username: string, role: string } | null>}
+ */
 async function getUserByCookie(cookie) {
     if (!cookie) return null;
-    /*
-    DB Interface, waiting for implement
 
-    Input: cookie (string)
-    Output: { id, username, role } | null
+    try {
+        const conn = pool.getAccount();
+        const data = packParams([cookie]);
+        const resp = await conn.send('C', data);
 
-    Expected middleware behavior:
-    - Verify cookie exists and is valid (not expired)
-    - Return user object with id, username, role fields
-    - Return null if cookie is invalid or expired
-    */
-}
-
-async function checkPermission(userId, permission) {
-    /*
-    DB Interface, waiting for implement
-
-    Input: userId (int), permission (string, e.g., 'can_manage_users')
-    Output: boolean
-
-    Expected middleware behavior:
-    - Check if user has the specified permission
-    - Permission names correspond to flag bits in the account system
-    - Return true if user has the permission, false otherwise
-    - For admin/superadmin, should return true for any permission (handled by caller)
-    */
-}
-
-async function requireLogin(req, res, next) {
-    let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-    if (req.headers.cookie && !cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-        if (match) {
-            cookie = decodeURIComponent(match[1]);
+        if (resp.command !== 'Y') {
+            return null;
         }
-    }
-    const user = await getUserByCookie(cookie);
-    if (!user) return res.status(401).json({ status: 'N', error: '请先登录' });
-    req.user = user;
-    next();
-}
 
-async function checkAdmin(req) {
-    let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-    if (req.headers.cookie && !cookie) {
-        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-        if (match) {
-            cookie = decodeURIComponent(match[1]);
+        const parts = parsePack(resp.data);
+        if (parts.length < 3) {
+            logger.logError('getUserByCookie: Invalid response from middleware', new Error('Expected 3 parts, got ' + parts.length));
+            return null;
         }
-    }
-    if (!cookie) return false;
-    const user = await getUserByCookie(cookie);
-    if (user && (user.role === 'admin' || user.role === 'superadmin')) return true;
-    return user && ((await checkPermission(user.id, 'can_manage_users')) || (await checkPermission(user.id, 'can_manage_problems')) || (await checkPermission(user.id, 'can_manage_contests')) || (await checkPermission(user.id, 'can_manage_disk')));
-}
 
-async function requireAdmin(req, res, next) {
-    if (!(await checkAdmin(req))) return res.status(403).json({ status: 'N', error: '权限不足' });
-    next();
+        const uid = parseInt(parts[0]);
+        if (isNaN(uid)) {
+            logger.logError('getUserByCookie: Invalid uid in response', new Error('uid: ' + parts[0]));
+            return null;
+        }
+
+        return {
+            id: uid,
+            username: parts[1],
+            role: parts[2] // "user" | "admin" | "superadmin"
+        };
+    } catch (err) {
+        logger.logError(`getUserByCookie failed: ${err.message}`, err);
+        return null;
+    }
 }
 
 async function getUserPermissions(userId) {
@@ -96,10 +73,50 @@ async function checkPermission(userId, permission) {
     */
 }
 
+async function requireLogin(req, res, next) {
+    let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
+    if (req.headers.cookie && !cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+        if (match) {
+            cookie = decodeURIComponent(match[1]);
+        }
+    }
+    const user = await getUserByCookie(cookie);
+    if (!user) return res.status(401).json({ status: 'N', error: '请先登录' });
+    req.user = user;
+    next();
+}
+
+async function checkAdmin(req) {
+    let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
+    if (req.headers.cookie && !cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+        if (match) {
+            cookie = decodeURIComponent(match[1]);
+        }
+    }
+    if (!cookie) return false;
+    const user = await getUserByCookie(cookie);
+    if (!user) return false;
+    if (user.role === 'admin' || user.role === 'superadmin') return true;
+    return
+        (await checkPermission(user.id, 'can_manage_users')) ||
+        (await checkPermission(user.id, 'can_manage_problems')) ||
+        (await checkPermission(user.id, 'can_manage_contests')) ||
+        (await checkPermission(user.id, 'can_manage_disk'));
+}
+
+async function requireAdmin(req, res, next) {
+    if (!(await checkAdmin(req)))
+        return res.status(403).json({ status: 'N', error: '权限不足' });
+    next();
+}
+
 // Middleware: only allow superadmin
 function requireSuperAdmin(req, res, next) {
     const user = req.user;
-    if (!user || user.role !== 'superadmin') return res.status(403).json({ status: 'N', error: '权限不足' });
+    if (!user || user.role !== 'superadmin')
+        return res.status(403).json({ status: 'N', error: '权限不足' });
     next();
 }
 
@@ -134,7 +151,7 @@ async function optionalAuth(req, res, next) {
     next();
 }
 
-module.exports = { getUserByCookie, requireLogin, requireAdmin, requirePermission, optionalAuth, checkPermission, checkAdmin, getUserPermissions, requireSuperAdmin };
+module.exports = { requireLogin, requireAdmin, requirePermission, optionalAuth, checkPermission, checkAdmin, getUserPermissions, requireSuperAdmin };
 
 /*
 ## 标注汇总
@@ -143,7 +160,7 @@ module.exports = { getUserByCookie, requireLogin, requireAdmin, requirePermissio
 
 | 函数 | 标注位置 | 说明 |
 |------|---------|------|
-| `getUserByCookie` | 替换 `pool.query` | Cookie → 用户信息查询 |
+| `getUserByCookie` | 删除，移动至 db.js | Cookie → 用户信息查询 |
 | `checkPermission` | 替换 `pool.query` | 用户权限查询 |
 | `getUserPermissions` | 替换 `pool.query` | 获取用户所有权限 |
 | `checkPermission`（第二个） | 替换 `pool.query` | 权限检查（含角色判断） |

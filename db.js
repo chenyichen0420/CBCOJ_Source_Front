@@ -44,24 +44,24 @@ function packParams(arr) {
 }
 
 function parsePack(data) {
-	const result = [];
-	let i = 0;
-	while (i < data.length) {
-		const first = data[i++];
-		let len;
-		if (first >= 0x80) {
-			len = 256 - first;
-		} else {
-			if (i + 2 >= data.length) break;
-			const b1 = data[i++];
-			const b2 = data[i++];
-			len = (first << 16) | (b1 << 8) | b2;
-		}
-		if (i + len > data.length) break;
-		result.push(data.slice(i, i + len).toString('utf8'));
-		i += len;
-	}
-	return result;
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        const first = data[i++];
+        let len;
+        if (first >= 0x80) {
+            len = 256 - first;
+        } else {
+            if (i + 2 >= data.length) break;
+            const b1 = data[i++];
+            const b2 = data[i++];
+            len = (first << 16) | (b1 << 8) | b2;
+        }
+        if (i + len > data.length) break;
+        result.push(data.slice(i, i + len));
+        i += len;
+    }
+    return result;
 }
 
 function buildPacket(command, seq, data) {

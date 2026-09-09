@@ -69,8 +69,8 @@ app.use(async (req, res, next) => {
         */
         if (rows.length > 0) {
             const ban = rows[0];
-            // 对于自动封禁（auto_rate_limit），10 分钟后自动解除
-            const AUTO_UNBAN_MS = 10 * 60 * 1000;
+            // 对于自动封禁（auto_rate_limit），30 分钟后自动解除
+            const AUTO_UNBAN_MS = 30 * 60 * 1000;
             if (ban.reason === 'auto_rate_limit' && ban.created_at) {
                 const created = new Date(ban.created_at).getTime();
                 if (Date.now() - created > AUTO_UNBAN_MS) {
@@ -104,7 +104,7 @@ app.use(async (req, res, next) => {
         while (arr.length && now - arr[0] > ipRequestWindow) arr.shift();
         ipRequestCounts.set(ip, arr);
         // 如果短时间内请求过多，自动封禁（阈值可调整）
-        const AUTO_BAN_THRESHOLD = 2000; // 1 分钟内超过 2000 次请求
+        const AUTO_BAN_THRESHOLD = 1000; // 1 分钟内超过 1000 次请求
         if (arr.length > AUTO_BAN_THRESHOLD) {
             try {
                 /*

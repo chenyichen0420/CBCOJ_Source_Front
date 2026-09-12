@@ -14,7 +14,7 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const os = require('os');
-const { DATA_ROOT, CHECKER_ROOT } = require('../config');
+// const { DATA_ROOT, CHECKER_ROOT } = require('../config');
 const { validateInt, validateString, validateEmail, validateBoolean } = require('../validation');
 
 function generateCookie() {

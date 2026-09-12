@@ -47,7 +47,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const submissionId = window.location.pathname.split('/').pop();
 const cookie = getcookie();
 if (submissionId !== null) {
-	document.getElementById('PageTitle').textContent = `评测结果 - ${submissionId} - LZJOJ`;
+	document.getElementById('PageTitle').textContent = `评测结果 - ${submissionId} - CBCOJ`;
 	document.getElementById('record-content').textContent = '正在加载评测结果...';
 } else {
 	document.getElementById('record-content').textContent = '无效的提交ID';

@@ -182,8 +182,8 @@ app.use(async (req, res, next) => {
 });
 
 // ---------- 辅助函数 ----------
-const navigation = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> LZJOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/disk">网盘</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a>`;
-const navigationAdmin = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> LZJOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/disk">网盘</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a><a href="/admin">管理后台</a>`;
+const navigation = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/disk">网盘</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a>`;
+const navigationAdmin = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/disk">网盘</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a><a href="/admin">管理后台</a>`;
 
 // 服务器端简单消毒函数：使用 cheerio 移除危险元素与属性
 function sanitizeHtmlServer(html) {

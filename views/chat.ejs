@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>私信 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/auto-render.min.js"></script>
+    <style>
+        .chat-layout { display: flex; gap: 20px; }
+        .chat-left { width: 280px; background: var(--bg-card); border-radius: var(--radius-lg); padding: 12px; }
+        .chat-right { flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); padding: 12px; display:flex; flex-direction:column; height:600px; }
+        .contact-item { padding: 8px; border-radius: 8px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+        .contact-item:hover { background: var(--bg-tertiary); }
+        .messages { flex:1; overflow-y:auto; padding:12px; }
+        .message-row { display:flex; gap:8px; margin-bottom:10px; align-items:flex-end; }
+        .msg-left { justify-content:flex-start; }
+        .msg-right { justify-content:flex-end; }
+        .bubble { max-width:70%; padding:10px 12px; border-radius:12px; background: var(--bg-secondary); }
+        .bubble.me { background: linear-gradient(135deg,var(--primary),#79bfff); color: #fff; }
+        .message-input { display:flex; gap:8px; padding-top:8px; }
+        .message-input textarea { flex:1; height:60px; resize:none; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>私信</h1>
+            <div class="chat-layout">
+                <div class="chat-left">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <h3 style="margin:0">会话</h3>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button id="addContactBtn" style="font-size:12px;padding:6px 8px;border-radius:6px;">添加联系人</button>
+                            <div style="position:relative">
+                                <input id="contactSearch" placeholder="搜索用户名" style="display:none;width:160px;padding:6px;border-radius:6px;border:1px solid var(--border)" />
+                                <div id="searchDropdown" style="display:none;position:absolute;top:36px;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;max-height:220px;overflow:auto;z-index:50"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="contacts"></div>
+                </div>
+                <div class="chat-right">
+                    <div id="chatHeader"><h3 id="chatWith">请选择联系人</h3></div>
+                    <div class="messages" id="messages"></div>
+                    <div class="message-input">
+                        <textarea id="msgText" placeholder="请输入消息，支持 Markdown 与 LaTeX"></textarea>
+                        <button id="sendBtn">发送</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        let currentTarget = null;
+        async function loadConversations() {
+            const resp = await fetch('/api/conversations');
+            const data = await resp.json();
+            const cont = document.getElementById('contacts');
+            cont.innerHTML = '';
+            if (data.status === 'Y' && data.conversations.length) {
+                data.conversations.forEach(c => {
+                    const el = document.createElement('div');
+                    el.className = 'contact-item';
+                    el.innerHTML = `<img src="/api/avatar/${encodeURIComponent(c.username)}" class="avatar"> <div style="flex:1"><strong>${c.username}</strong><div style="font-size:12px;color:var(--text-secondary)">${(c.preview||'').slice(0,60)}</div></div>`;
+                    el.addEventListener('click', () => { openConversation(c.username); });
+                    cont.appendChild(el);
+                });
+            } else {
+                cont.innerHTML = '<p class="text-secondary">暂无会话</p>';
+            }
+        }
+
+        async function openConversation(username) {
+            currentTarget = username;
+            document.getElementById('chatWith').textContent = '与 ' + username + ' 的聊天';
+            const resp = await fetch(`/api/conversation?user=${encodeURIComponent(username)}`);
+            const data = await resp.json();
+            const msgs = document.getElementById('messages');
+            msgs.innerHTML = '';
+            if (data.status === 'Y') {
+                data.messages.forEach(m => {
+                    const isMe = (m.from === '<%= user ? user.username : '' %>');
+                    const row = document.createElement('div');
+                    row.className = 'message-row ' + (isMe ? 'msg-right' : 'msg-left');
+                    const bubble = document.createElement('div');
+                    bubble.className = 'bubble ' + (isMe ? 'me' : '');
+                    const html = marked.parse(m.content || '');
+                    bubble.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+                    row.appendChild(isMe ? bubble : (() => { const img = document.createElement('img'); img.src = '/api/avatar/' + encodeURIComponent(m.from); img.className='avatar'; const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.appendChild(img); wrap.appendChild(bubble); return wrap; })());
+                    msgs.appendChild(row);
+                });
+                if (typeof renderMathInElement !== 'undefined') renderMathInElement(msgs, { delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}], throwOnError:false });
+                msgs.scrollTop = msgs.scrollHeight;
+            }
+        }
+
+        document.getElementById('sendBtn').addEventListener('click', async () => {
+            const txt = document.getElementById('msgText').value.trim();
+            if (!currentTarget || !txt) { alert('请选择联系人并输入消息'); return; }
+            const encoded = btoa(unescape(encodeURIComponent(txt)));
+            const resp = await fetch('/api/postmsg', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ target: currentTarget, content: encoded }) });
+            const data = await resp.json();
+            if (data.status === 'Y') {
+                document.getElementById('msgText').value = '';
+                await openConversation(currentTarget);
+                await loadConversations();
+            } else {
+                alert('发送失败:' + data.error);
+            }
+        });
+
+        // 添加联系人：切换模糊搜索框显示
+        const addBtn = document.getElementById('addContactBtn');
+        const searchInput = document.getElementById('contactSearch');
+        const dropdown = document.getElementById('searchDropdown');
+
+        addBtn.addEventListener('click', () => {
+            if (searchInput.style.display === 'none') {
+                searchInput.style.display = 'block';
+                searchInput.value = '';
+                dropdown.style.display = 'none';
+                searchInput.focus();
+            } else {
+                searchInput.style.display = 'none';
+                dropdown.style.display = 'none';
+            }
+        });
+
+        let searchTimer = null;
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim();
+            if (searchTimer) clearTimeout(searchTimer);
+            if (!q) { dropdown.style.display = 'none'; return; }
+            searchTimer = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`/api/usersearch?q=${encodeURIComponent(q)}`);
+                    const data = await resp.json();
+                    dropdown.innerHTML = '';
+                    if (data.status === 'Y' && data.users && data.users.length) {
+                        data.users.forEach(u => {
+                            const item = document.createElement('div');
+                            item.style.padding = '8px';
+                            item.style.cursor = 'pointer';
+                            item.style.borderBottom = '1px solid var(--border)';
+                            item.textContent = u;
+                            item.addEventListener('click', async () => {
+                                searchInput.style.display = 'none';
+                                dropdown.style.display = 'none';
+                                await loadConversations();
+                                openConversation(u);
+                            });
+                            dropdown.appendChild(item);
+                        });
+                        dropdown.style.display = 'block';
+                    } else {
+                        dropdown.style.display = 'none';
+                    }
+                } catch (e) {
+                    dropdown.style.display = 'none';
+                }
+            }, 220);
+        });
+
+        // 关闭下拉：点击列表外部
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('contactSearch').contains(e.target) && !addBtn.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // 初始加载
+        loadConversations();
+    </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <form id="login-form" class="card form-card">
+                <label for="username">用户名:</label>
+                <input type="text" id="username" name="username" required>
+                <label for="password">密码:</label>
+                <input type="password" id="password" name="password" required>
+                <button type="submit">登录</button>
+            </form>
+            <div id="message"></div>
+            <hr>
+            <a href="/register" style="display: flex; justify-content: center;">没有账号？点我去注册</a>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const resp = await fetch('/api/login?' + new URLSearchParams(formData));
+            const data = await resp.json();
+            if (data.status === 'Y') {
+                document.cookie = `user_cookie=${data.cookie}; path=/`;
+                alert('登录成功');
+                window.location.href = '/';
+            } else {
+                document.getElementById('message').textContent = '登录失败: ' + data.error;
+            }
+        });
+    </script>
+</body>
+</html>

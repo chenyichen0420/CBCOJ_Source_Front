@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评测结果 #<%= submission.id %> - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <style>
+        pre.code { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; background-color: var(--card-bg); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); max-width: 100%; overflow-x: auto; background-color: rgba(0,0,0,.25); }
+        pre.code code { display: block; font-family: monospace; font-size: 14px; line-height: 1.5; }
+        .testcase-card { border-left: 4px solid; margin-bottom: 12px; padding: 8px 12px; background: var(--bg-secondary); border-radius: 4px; }
+        .testcase-card-header { display: flex; justify-content: space-between; }
+        .testcase-title { font-weight: bold; }
+        .testcase-details { display: flex; gap: 20px; margin: 8px 0; }
+        .testcase-detail-item { flex: 1; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <div class="status-layout">
+                <div class="left card">
+                    <h1>评测结果 - #<%= submission.id %></h1>
+                    <div id="record-content">
+                        <h3>评测结果</h3>
+                        <p style="color: <%= overallCode === 200 ? 'green' : (overallCode === 408 ? 'lightblue' : (overallCode === 406 ? 'red' : 'white')) %>"><%= overallDesc %></p>
+                        <p>时间: <%= totalTime %>ms</p>
+                        <p>内存: <%= (maxMemory / 1024).toFixed(2) %>MB</p>
+                        <p>得分: <%= totalScore / results.length %></p>
+                        <h4>测试点详情</h4>
+                        <details>
+                            <summary>点击查看</summary>
+                            <% results.forEach((r, idx) => { 
+                                let color = '#fff';
+                                if (r.status === 'AC') color = 'green';
+                                else if (r.status === 'TLE') color = 'lightblue';
+                                else if (r.status === 'WA') color = 'red';
+                                else if (r.status === 'RE') color = 'purple';
+                                else if (r.status === 'CE') color = 'orange';
+                            %>
+                            <div class="testcase-card" style="border-left-color: <%= color %>;">
+                                <div class="testcase-card-header">
+                                    <span class="testcase-title" style="color: <%= color %>;">测试点 <%= r.test_point_index %> : <%= r.status %></span>
+                                    <span class="testcase-score"><%= r.score %> 分</span>
+                                </div>
+                                <div class="testcase-details">
+                                    <div class="testcase-detail-item"><strong>时间</strong><br><%= r.time_ms || 0 %> ms</div>
+                                    <div class="testcase-detail-item"><strong>内存</strong><br><%= (r.memory_kb / 1024).toFixed(2) || 0 %> MB</div>
+                                </div>
+                                <% if (r.detail) { %>
+                                    <div class="testcase-description"><strong>详细描述</strong><br><%= r.detail %></div>
+                                <% } %>
+                            </div>
+                            <% }) %>
+                        </details>
+                        <details>
+                            <summary>源代码</summary>
+                            <pre class="code"><code><%= sourceCode %></code></pre>
+                        </details>
+                    </div>
+                </div>
+                <div class="right card">
+                    <div class="card" id="basic-user-info" style="padding: 10px;">
+                        <div id="user"><h3>提交用户</h3>
+                            <p>
+                                <a href="/profile/<%= submission.username %>" style="color: <%= submission.user_name_color || (submission.user_role === 'admin' || submission.user_role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>"><img src="/api/avatar/<%= encodeURIComponent(submission.username) %>" class="avatar"> <%= submission.username %></a>
+                                <% if (submission.user_badge) { %>
+                                    <span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= submission.user_badge %></span>
+                                <% } %>
+                            </p>
+                        </div>
+                        <div id="user"><h3>提交时间</h3><p><%= new Date(submission.submit_time).toLocaleString() %></p></div>
+                        <div id="user"><h3>提交题目</h3><a href="/problem/<%= submission.problemname %>"><%= submission.problemtitle %></a></div>
+                    </div>
+                    <div class="card" style="margin-top: 18px; padding: 10px;">
+                        <h3>评测结果说明</h3>
+                        <ol style="padding-left: 20px; color: var(--muted);">
+                            <li><strong>Accepted (AC)</strong>: 代码通过了所有测试点。</li>
+                            <li><strong>Wrong Answer (WA)</strong>: 代码的输出与预期不符。</li>
+                            <li><strong>Time Limit Exceeded (TLE)</strong>: 代码运行时间超过了题目规定的时间限制。</li>
+                            <li><strong>Memory Limit Exceeded (MLE)</strong>: 代码使用的内存超过了题目规定的内存限制。</li>
+                            <li><strong>Runtime Error (RE)</strong>: 代码在运行过程中发生了错误，如除零错误、数组越界等。</li>
+                            <li><strong>Compilation Error (CE)</strong>: 代码无法通过编译。</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+</body>
+</html>

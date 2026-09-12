@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <style>
+        .admin-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+        .tab-btn { padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 16px; color: var(--text-secondary); }
+        .tab-btn.active { border-bottom-color: var(--primary); color: var(--primary); }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        .permission-table, .problem-table, .contest-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .permission-table th, .problem-table th, .contest-table th { background: var(--bg-secondary); padding: 10px; text-align: left; }
+        .permission-table td, .problem-table td, .contest-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        .perms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px 0; }
+        /* 使用全局样式 .modal / .modal-content（layout.css） */
+        .btn-warning { background-color: #ff9800; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .upload-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+        .select-problems { max-height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>管理后台</h1>
+            <div id="admin-content">
+                <p>正在验证权限...</p>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script type="text/javascript" src="/admin/assets/admin.js"></script>
+</body>
+</html>

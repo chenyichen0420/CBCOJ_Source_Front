@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>讨论区 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>讨论区</h1>
+            <p class="muted">在这里与其他用户交流算法、分享经验、提出问题</p>
+
+            <div class="discussion-layout">
+                <div class="left">
+                    <div class="discussion-list" id="discussion-list">
+                        <h3 style="margin-top: 0px;">最新讨论</h3>
+                        <% discussions.forEach(disc => { %>
+                            <div class="discussion-item card">
+                                <div class="discussion-header">
+                                    <span class="discussion-author"><%= disc.author_id %></span>
+                                    <span class="discussion-date"><%= new Date(disc.created_at).toLocaleString() %></span>
+                                </div>
+                                <h4 class="discussion-title">
+                                    <a href="/discussion-detail/<%= disc.id %>"><%= disc.title %></a>
+                                </h4>
+                            </div>
+                        <% }) %>
+                    </div>
+                    <div class="pagination" id="pagination">
+                        <% for (let i = 1; i <= totalPages; i++) { %>
+                            <a href="/discussions?page=<%= i %>" style="<%= i === page ? 'background: rgba(78,161,255,.24);' : '' %>"><%= i %></a>
+                        <% } %>
+                    </div>
+                </div>
+
+                <div class="right">
+                    <div class="card" style="margin-top: 18px; padding: 6px 10px;">
+                        <h3>讨论区规则</h3>
+                        <ol style="padding-left: 20px; color: var(--muted);">
+                            <li>尊重他人，文明交流</li>
+                            <li>禁止发布无关广告</li>
+                            <li>提问前先搜索类似问题</li>
+                            <li>解答问题时尽量详细</li>
+                            <li>欢迎分享学习心得</li>
+                        </ol>
+                    </div>
+
+                    <div class="card form-card" style="margin-top: 18px;">
+                        <h3>发布新讨论</h3>
+                        <form id="new-discussion-form">
+                            <label for="discussion-title">标题</label>
+                            <input type="text" id="discussion-title" placeholder="请输入讨论标题" required>
+                            <label for="discussion-content">内容</label>
+                            <textarea id="discussion-content" rows="6" placeholder="详细描述你的问题或想法..." required></textarea>
+                            <button type="submit">发布讨论</button>
+                            <div id="submit-message"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script type="text/javascript" src="/assets/discussions.min.js"></script>
+</body>
+</html>

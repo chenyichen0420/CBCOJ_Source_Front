@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>讨论详情 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <style>
+        .discussion-reply { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        .discussion-reply-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .discussion-reply-author { font-weight: bold; color: #4ea1ff; }
+        .discussion-date { color: #888; font-size: 0.9em; }
+        .discussion-reply-content { line-height: 1.6; padding-left: 10px; border-left: 3px solid #f0f0f0; }
+    </style>
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/auto-render.min.js"></script>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <div class="discussion-layout">
+                <div class="discussion-content left card">
+                    <h1 class="discussion-title" style="display:flex;justify-content:space-between;align-items:center;"><span><%= discussion.title %></span>
+                        <span style="display:flex;gap:12px;align-items:center;">
+                            <% if (discussion.author_meta) { %>
+                                <a href="/profile/<%= discussion.author_name %>" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;">
+                                    <img src="/api/avatar/<%= encodeURIComponent(discussion.author_name) %>" class="avatar" style="width:32px;height:32px;">
+                                    <span style="font-weight:600;color: <%= discussion.author_meta && discussion.author_meta.name_color ? discussion.author_meta.name_color : (discussion.author_meta && (discussion.author_meta.role === 'admin' || discussion.author_meta.role === 'superadmin') ? '#8a2be2' : '#1e90ff') %>"><%= discussion.author_name %></span>
+                                </a>
+                                <% if (discussion.author_meta.badge) { %>
+                                    <span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= discussion.author_meta.badge %></span>
+                                <% } %>
+                            <% } %>
+                            <% if (user && (user.username === discussion.author_name || user.role === 'superadmin')) { %>
+                                <button id="delete-discussion" style="background:transparent;border:1px solid #f44;color:#f44;padding:4px 8px;border-radius:6px;cursor:pointer;">删除讨论</button>
+                            <% } %>
+                        </span>
+                    </h1>
+                    <div class="discussion-meta">
+                        <span class="discussion-author">作者: 
+                            <a href="/profile/<%= discussion.author_name %>" style="color: <%= discussion.author_meta && discussion.author_meta.name_color ? discussion.author_meta.name_color : (discussion.author_meta && (discussion.author_meta.role === 'admin' || discussion.author_meta.role === 'superadmin') ? '#8a2be2' : '#1e90ff') %>"><img src="/api/avatar/<%= encodeURIComponent(discussion.author_name) %>" class="avatar"> <%= discussion.author_name %></a>
+                            <% if (discussion.author_meta && discussion.author_meta.badge) { %>
+                                <span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= discussion.author_meta.badge %></span>
+                            <% } %>
+                        </span>
+                        <span class="discussion-date">发表于: <%= new Date(discussion.created_at).toLocaleString() %></span>
+                    </div>
+                    <div class="discussion-body">
+                        <div id="discussion-main" data-md="<%= encodeURIComponent(discussion.content) %>"></div>
+                    </div>
+                    <hr>
+                    <div class="discussion-body" id="discussion-reply">
+                        <% replies.forEach(reply => { %>
+                            <div class="discussion-reply">
+                                <div class="discussion-reply-header">
+                                    <span class="discussion-reply-author">
+                                        <a href="/profile/<%= reply.author_name %>" style="color: <%= reply.author_meta && reply.author_meta.name_color ? reply.author_meta.name_color : (reply.author_meta && (reply.author_meta.role === 'admin' || reply.author_meta.role === 'superadmin') ? '#8a2be2' : '#1e90ff') %>"><img src="/api/avatar/<%= encodeURIComponent(reply.author_name) %>" class="avatar"> <%= reply.author_name %></a>
+                                        <% if (reply.author_meta && reply.author_meta.badge) { %>
+                                            <span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= reply.author_meta.badge %></span>
+                                        <% } %>
+                                    </span>
+                                    <span style="display:flex;gap:8px;align-items:center;">
+                                        <span class="discussion-date"><%= new Date(reply.created_at).toLocaleString() %></span>
+                                        <button class="delete-reply-btn" data-reply-id="<%= reply.id %>" style="background:transparent;border:none;color:#c44;cursor:pointer;">删除</button>
+                                    </span>
+                                </div>
+                                <div class="discussion-reply-content">
+                                    <div data-md="<%= encodeURIComponent(reply.content) %>"></div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                    <div id="pagination" class="pagination" style="margin-top: 20px;">
+                        <% for (let i = 1; i <= totalPages; i++) { %>
+                            <a href="/discussion-detail/<%= cid %>?page=<%= i %>" style="<%= i === page ? 'background: rgba(78,161,255,.24);' : '' %>"><%= i %></a>
+                        <% } %>
+                    </div>
+                </div>
+                <div class="card right">
+                    <div class="author-card" style="text-align:center;margin-bottom:12px;padding:10px;background:var(--bg-secondary);border-radius:8px;">
+                        <% if (discussion.author_meta) { %>
+                            <img src="/api/avatar/<%= encodeURIComponent(discussion.author_name) %>" class="avatar" style="width:64px;height:64px;"><div style="margin-top:8px;font-weight:600;color: <%= discussion.author_meta && discussion.author_meta.name_color ? discussion.author_meta.name_color : (discussion.author_meta && (discussion.author_meta.role === 'admin' || discussion.author_meta.role === 'superadmin') ? '#8a2be2' : '#1e90ff') %>"><%= discussion.author_name %></div>
+                            <% if (discussion.author_meta.badge) { %><div style="margin-top:6px;font-size:12px;color:#fff;background:#333;padding:4px 8px;border-radius:8px;display:inline-block;"><%= discussion.author_meta.badge %></div><% } %>
+                        <% } else { %>
+                            <div>作者: <%= discussion.author_name %></div>
+                        <% } %>
+                    </div>
+                    <h2>回复讨论</h2>
+                    <form id="reply-form">
+                        <textarea id="reply-message" rows="5" style="width: 100%;" placeholder="在此输入您的回复内容..."></textarea>
+                        <button type="submit" style="margin-top: 10px;">提交回复</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        const discussionId = "<%= cid %>";
+    </script>
+    <script type="text/javascript" src="/assets/discussion-detail.min.js"></script>
+    <script>
+        // 将带有 data-md 的元素转换为 HTML，并渲染公式
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('[data-md]').forEach(el => {
+                try {
+                    const md = decodeURIComponent(el.getAttribute('data-md') || '');
+                    const html = marked.parse(md || '');
+                    el.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+                } catch(e) { el.innerText = '(解析错误)'; }
+            });
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(document.getElementById('discussion-main') || document.body, { delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}], throwOnError:false });
+                renderMathInElement(document.getElementById('discussion-reply') || document.body, { delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}], throwOnError:false });
+            }
+        });
+    </script>
+    <script>
+        // 删除回复和讨论的前端处理
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.delete-reply-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    if (!confirm('确定删除该回复吗？')) return;
+                    const id = btn.getAttribute('data-reply-id');
+                    const res = await fetch('/api/reply/' + encodeURIComponent(id), { method: 'DELETE' });
+                    const j = await res.json();
+                    if (j.status === 'Y') location.reload(); else alert('删除失败: ' + (j.error||'未知'));
+                });
+            });
+
+            const delDisc = document.getElementById('delete-discussion');
+            if (delDisc) {
+                delDisc.addEventListener('click', async () => {
+                    if (!confirm('确定删除该讨论？此操作不可撤销')) return;
+                    const res = await fetch('/api/discussion/<%= cid %>', { method: 'DELETE' });
+                    const j = await res.json();
+                    if (j.status === 'Y') window.location.href = '/discussions'; else alert('删除失败: ' + (j.error||'未知'));
+                });
+            }
+        });
+    </script>
+</body>
+</html>

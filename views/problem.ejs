@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title><%= problem.title %> - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <div class="content problem-layout">
+                <div class="left card" id="problem-content">
+                    <div class="problem-header">
+                        <div class="problem-title-section">
+                            <h1 id="title"><%= problem.title %></h1>
+                        </div>
+                        <div class="problem-limits-section">
+                            <div id="time-limit" class="limit-item">时间限制: <%= problem.timelm %>ms</div>
+                            <div id="memory-limit" class="limit-item">内存限制: <%= Math.floor(problem.memlm / 1024) %>MB</div>
+                        </div>
+                    </div>
+                    <div id="background"><h3>题目背景</h3><div><script type="text/plain" class="raw-markdown"><%= problem.background || '' %></script></div></div>
+                    <div id="description"><h3>题目描述</h3><div><script type="text/plain" class="raw-markdown"><%= problem.description || '' %></script></div></div>
+                    <div id="inputfmt"><h3>输入格式</h3><div><script type="text/plain" class="raw-markdown"><%= problem.inputfmt || '' %></script></div></div>
+                    <div id="outputfmt"><h3>输出格式</h3><div><script type="text/plain" class="raw-markdown"><%= problem.outputfmt || '' %></script></div></div>
+                    <div id="hint"><h3>提示</h3><div><script type="text/plain" class="raw-markdown"><%= problem.hint || '' %></script></div></div>
+                    <div id="sample">
+                        <h3>样例</h3>
+                        <% problem.sample.forEach((sample, idx) => { %>
+                            <h4>样例输入 <%= idx+1 %></h4>
+                            <code class="card" style="margin:5px 5px 10px 5px; padding:5px;"><%= sample.input %></code>
+                            <h4>样例输出 <%= idx+1 %></h4>
+                            <code class="card" style="margin:5px 5px 10px 5px; padding:5px;"><%= sample.output %></code>
+                        <% }) %>
+                    </div>
+                    <div id="hint"><h3>提示</h3><div><%- problem.hintHtml %></div></div>
+                </div>
+                <div class="submit-form card">
+                    <h2>提交代码</h2>
+                    <div style="margin-bottom:12px;padding:8px;background:var(--bg-secondary);border-radius:6px;">
+                        <% if (problem.author_meta) { %>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <img src="/api/avatar/<%= encodeURIComponent(problem.author_meta.username) %>" style="width:48px;height:48px;border-radius:6px;">
+                                <div>
+                                    <a href="/profile/<%= problem.author_meta.username %>" style="font-weight:600;color:<%= problem.author_meta.name_color || '#1e90ff' %>"><%= problem.author_meta.username %></a>
+                                    <% if (problem.author_meta.badge) { %><div style="font-size:12px;color:#fff;background:#333;padding:2px 6px;border-radius:6px;display:inline-block;margin-top:6px;"><%= problem.author_meta.badge %></div><% } %>
+                                </div>
+                            </div>
+                        <% } %>
+                    </div>
+                    <form id="submit-form" enctype="multipart/form-data">
+                        <label for="language">语言:</label>
+                        <select id="language" name="lan" required style="color:#000;background-color:rgba(234,244,255,.32)">
+                            <option value="C++14">C++ 14</option>
+                            <option value="C++14-O2">C++ 14(O2)</option>
+                            <option value="C++17">C++ 17</option>
+                            <option value="C++17-O2">C++ 17(O2)</option>
+                            <option value="C++20">C++ 20</option>
+                            <option value="C++20-O2">C++ 20(O2)</option>
+                            <option value="C++23">C++ 23</option>
+                            <option value="C++23-O2">C++ 23(O2)</option>
+                            <option value="C++23-O3">C++ 23(O3)</option>
+                            <option value="C++26">C++ 26</option>
+                            <option value="C++26-O2">C++ 26(O2)</option>
+                            <option value="C++26-O3">C++ 26(O3)</option>
+                        </select>
+                        <label for="code-file">代码文件:</label>
+                        <input type="file" id="code-file" name="code" required>
+                        <button type="submit">提交</button>
+                        <% if (problem.author_meta) { %>
+                            <% if (problem.author_meta.username === user.username || user.role === 'admin' || user.role === 'superadmin') { %>
+                                <a href="/problem/edit/<%= problem.pid %>" style="margin-left:10px;color:#1e90ff;">编辑题目</a>
+                            <% } %>
+                        <% } %>
+                    </form>
+                    <div id="submit-message"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/assets/auto-render.min.js"></script>
+    <script src="/assets/markdown-renderer.js"></script>
+    <script>
+        const problemId = "<%= problem.pid %>";
+    </script>
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script type="text/javascript" src="/assets/problem.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑题目 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/auto-render.min.js"></script>
+    <style>
+        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .editor-pane { background: var(--bg-secondary); padding: 12px; border-radius:8px; }
+        .sample-list { margin-top:8px; }
+        .sample-item { display:flex; gap:8px; margin-bottom:6px; }
+    </style>
+</head>
+<body>
+<nav>
+    <div class="nav-left"><%- navigation %></div>
+</nav>
+<main class="page">
+    <div class="container">
+        <h1><%- title %></h1>
+        <form id="problem-form">
+            <div style="display:flex;gap:12px;align-items:center;">
+                <input name="title" placeholder="题目标题" required style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);">
+            </div>
+            <div class="editor-grid" style="margin-top:12px;">
+                <div class="editor-pane">
+                    <label>题目描述 (Markdown)</label>
+                    <textarea name="description" id="description" rows="10" style="width:100%;"></textarea>
+                    <label style="margin-top:8px;display:block;">背景</label>
+                    <textarea name="background" id="background" rows="4" style="width:100%;"></textarea>
+                    <label style="margin-top:8px;display:block;">输入格式</label>
+                    <textarea name="inputfmt" rows="2" style="width:100%;"></textarea>
+                    <label style="margin-top:8px;display:block;">输出格式</label>
+                    <textarea name="outputfmt" rows="2" style="width:100%;"></textarea>
+                </div>
+                <div class="editor-pane">
+                    <label>实时预览</label>
+                    <div id="preview" style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;min-height:300px;overflow:auto;"></div>
+                    <label style="margin-top:8px;display:block;">样例</label>
+                    <div id="sample-area">
+                        <div class="sample-item"><input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" id="add-sample">添加</button></div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+                <button type="submit" style="background:var(--primary);color:#fff;padding:8px 12px;border-radius:6px;border:none;">提交题目（默认不公开）</button>
+                <a href="/problem/list">取消</a>
+            </div>
+            <% if (admin) { %>
+            <div style="margin-top:8px;">
+                <label><input type="checkbox" name="selected"> 精选 (管理员可选)</label>
+            </div>
+            <% } %>
+        </form>
+        <% /* 管理员的精选选项已改为复选框 */ %>
+    </div>
+</main>
+<script>
+    function renderPreview(){
+        const md = document.getElementById('description').value || '';
+        const html = marked.parse(md);
+        document.getElementById('preview').innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+        if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.getElementById('preview'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});
+    }
+    document.getElementById('description').addEventListener('input', renderPreview);
+    document.getElementById('background').addEventListener('input', renderPreview);
+    renderPreview();
+
+    document.getElementById('add-sample').addEventListener('click', ()=>{
+        const container = document.getElementById('sample-area');
+        const div = document.createElement('div'); div.className='sample-item';
+        div.innerHTML = '<input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" class="remove-sample">移除</button>';
+        container.appendChild(div);
+        div.querySelector('.remove-sample').addEventListener('click', ()=>div.remove());
+    });
+
+    document.getElementById('problem-form').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const form = e.target;
+        const data = new FormData(form);
+        // gather samples
+        const samples = [];
+        document.querySelectorAll('#sample-area .sample-item').forEach(si=>{
+            const inp = si.querySelector('input[name="sample_input"]')?.value || '';
+            const out = si.querySelector('input[name="sample_output"]')?.value || '';
+            if (inp || out) samples.push({input: inp, output: out});
+        });
+        const payload = {
+            title: form.title.value,
+            description: form.description.value,
+            background: form.background.value,
+            inputfmt: form.inputfmt.value,
+            outputfmt: form.outputfmt.value,
+            sample: JSON.stringify(samples)
+        };
+        const selectedEl = document.querySelector('input[name="selected"]');
+        if (selectedEl) payload.selected = selectedEl.checked ? 1 : 0;
+        const res = await fetch('/problem/new', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        const j = await res.json();
+        if (j.status === 'Y') {
+            alert('创建成功，默认未公开，请等待管理员精选或在个人设置中管理');
+            window.location.href = '/problem/list';
+        } else {
+            alert('创建失败: ' + (j.error||'未知错误'));
+        }
+    });
+</script>
+</body>
+</html>

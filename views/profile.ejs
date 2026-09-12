@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= profileUser.username %> 的个人主页 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/auto-render.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <style>
+        .profile-header { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold; color: var(--primary); }
+        .profile-info h2 { margin: 0 0 5px 0; }
+        .profile-info .username { font-size: 1.2rem; color: var(--text-secondary); }
+        .profile-markdown { background: var(--bg-secondary); padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .btn-edit { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>个人主页</h1>
+            <div id="profile-content">
+                <div class="profile-header">
+                        <img src="/api/avatar/<%= encodeURIComponent(profileUser.username) %>" alt="avatar" class="profile-avatar avatar avatar-lg">
+                    <div class="profile-info">
+                        <h2 style="color: <%= profileUser.name_color || (profileUser.role === 'admin' || profileUser.role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>"><a href="/profile/<%= encodeURIComponent(profileUser.username) %>" style="color: inherit; text-decoration: none;"><%= profileUser.username %></a></h2>
+                        <div class="username">@<a href="/profile/<%= encodeURIComponent(profileUser.username) %>" style="color: inherit; text-decoration: none;"><%= profileUser.username %></a>
+                        <% if (profileUser.badge) { %> <span class="badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:12px;margin-left:8px;"><%= profileUser.badge %></span><% } %>
+                        </div>
+                        <% if (currentUser && currentUser.username === profileUser.username) { %>
+                            <a href="/settings" class="btn btn-primary btn-edit">编辑个人主页</a>
+                        <% } %>
+                    </div>
+                </div>
+                <div class="profile-markdown">
+                    <div id="markdown-content">
+                        <% if (markdown && markdown.length) { %>
+                            <script type="text/plain" class="raw-markdown"><%= markdown %></script>
+                        <% } else { %>
+                            <p class="text-secondary">该用户还没有填写个人简介。</p>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script src="/assets/markdown-renderer.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(document.getElementById('markdown-content') || document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ],
+                    throwOnError: false
+                });
+            }
+        });
+    </script>
+</body>
+</html>

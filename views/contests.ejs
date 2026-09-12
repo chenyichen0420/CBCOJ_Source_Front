@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>比赛列表 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <style>
+        .contest-card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: 0.2s;
+        }
+        .contest-card:hover { background: var(--bg-hover); }
+        .contest-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
+        .contest-title a { text-decoration: none; color: var(--primary); }
+        .contest-time { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 10px; }
+        .contest-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-top: 5px;
+        }
+        .status-not-started { background: #ff9800; color: #fff; }
+        .status-running { background: #4caf50; color: #fff; }
+        .status-ended { background: #9e9e9e; color: #fff; }
+        .pagination { margin-top: 20px; text-align: center; }
+        .page-btn {
+            margin: 0 3px;
+            padding: 5px 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            cursor: pointer;
+        }
+        .page-btn.active { background: var(--primary); color: #fff; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>比赛列表</h1>
+            <div id="contests-container">
+                <% if (contests && contests.length > 0) {
+                    contests.forEach(c => {
+                        const now = new Date();
+                        const start = new Date(c.start_time);
+                        const end = new Date(c.end_time);
+                        let statusClass = '', statusText = '';
+                        if (now < start) {
+                            statusClass = 'status-not-started';
+                            statusText = '未开始';
+                        } else if (now >= start && now <= end) {
+                            statusClass = 'status-running';
+                            statusText = '进行中';
+                        } else {
+                            statusClass = 'status-ended';
+                            statusText = '已结束';
+                        }
+                %>
+                    <div class="contest-card">
+                        <div class="contest-title"><a href="/contest/<%= c.id %>"><%= c.title %></a></div>
+                        <div class="contest-time">开始: <%= new Date(c.start_time).toLocaleString() %> | 结束: <%= new Date(c.end_time).toLocaleString() %></div>
+                        <span class="contest-status <%= statusClass %>"><%= statusText %></span>
+                    </div>
+                <% }) } else { %>
+                    <p>暂无比赛</p>
+                <% } %>
+            </div>
+            <div id="pagination" class="pagination">
+                <% for (let i = 1; i <= totalPages; i++) { %>
+                    <button class="page-btn <%= i === page ? 'active' : '' %>" data-page="<%= i %>"><%= i %></button>
+                <% } %>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        document.querySelectorAll('.page-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const page = this.dataset.page;
+                window.location.href = `/contests?page=${page}`;
+            });
+        });
+    </script>
+</body>
+</html>

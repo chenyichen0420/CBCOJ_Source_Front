@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑题目 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/auto-render.min.js"></script>
+    <style>
+        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .editor-pane { background: var(--bg-secondary); padding: 12px; border-radius:8px; }
+        .sample-list { margin-top:8px; }
+        .sample-item { display:flex; gap:8px; margin-bottom:6px; }
+    </style>
+</head>
+<body>
+<nav>
+    <div class="nav-left"><%- navigation %></div>
+</nav>
+<main class="page">
+    <div class="container">
+        <h1><%- title %></h1>
+        <form id="problem-form">
+            <div style="display:flex;gap:12px;align-items:center;">
+                <input name="title" placeholder="题目标题" required style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);" value="<%= problem ? problem.title : '' %>">
+            </div>
+            <div class="editor-grid" style="margin-top:12px;">
+                <div class="editor-pane">
+                    <label>题目描述 (Markdown)</label>
+                    <textarea name="description" id="description" rows="10" style="width:100%;"><%= problem ? problem.description : '' %></textarea>
+                    <label style="margin-top:8px;display:block;">背景</label>
+                    <textarea name="background" id="background" rows="4" style="width:100%;"><%= problem ? problem.background : '' %></textarea>
+                    <label style="margin-top:8px;display:block;">输入格式</label>
+                    <textarea name="inputfmt" rows="2" style="width:100%;"></textarea>
+                    <label style="margin-top:8px;display:block;">输出格式</label>
+                    <textarea name="outputfmt" rows="2" style="width:100%;"></textarea>
+                </div>
+                <div class="editor-pane">
+                    <label>实时预览</label>
+                    <div id="preview" style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;min-height:300px;overflow:auto;"></div>
+                    <label style="margin-top:8px;display:block;">样例</label>
+                    <div id="sample-area">
+                        <% if (problem && problem.sample && problem.sample.length>0) { %>
+                            <% problem.sample.forEach(function(s){ %>
+                                <div class="sample-item"><input name="sample_input" placeholder="输入" style="flex:1;padding:6px;" value="<%= s.input %>"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;" value="<%= s.output %>"><button type="button" class="remove-sample">移除</button></div>
+                            <% }); %>
+                        <% } else { %>
+                        <div class="sample-item"><input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" id="add-sample">添加</button></div>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+            <% if (problem) { %>
+            <div style="margin-top:12px;">
+                <% if (admin) { %>
+                <label>PID (管理员可编辑)</label>
+                <input name="pid" value="<%= problem.pid %>">
+                <% } else { %>
+                <div>PID: <strong><%= problem.pid %></strong></div>
+                <% } %>
+            </div>
+            <% } %>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+                <button type="submit" style="background:var(--primary);color:#fff;padding:8px 12px;border-radius:6px;border:none;"><%= problem ? '保存修改' : '提交题目（默认不公开）' %></button>
+                <a href="/problem/list">取消</a>
+            </div>
+            <div style="margin-top:8px;">
+                <% if (problem) { %>
+                    <% if (admin || (user && problem.author === user.username)) { %>
+                        <label style="margin-right:12px;"><input type="checkbox" name="opened" <%= problem.opened ? 'checked' : '' %> > 公开</label>
+                    <% } else { %>
+                        <div>公开: <strong><%= problem.opened ? '是' : '否' %></strong></div>
+                    <% } %>
+                    <% if (admin) { %>
+                        <label><input type="checkbox" name="selected" <%= problem.selected ? 'checked' : '' %> > 精选</label>
+                    <% } else { %>
+                        <div style="display:inline-block;margin-left:8px;">精选: <strong><%= problem.selected ? '是' : '否' %></strong></div>
+                    <% } %>
+                <% } %>
+            </div>
+        </form>
+        <% if (problem) { %>
+        <div style="margin-top:16px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
+            <h3>上传数据与检查器</h3>
+            <div style="margin-top:8px;">
+                <label>上传数据包 (ZIP)</label>
+                <input type="file" id="data-file">
+                <button id="upload-data">上传数据</button>
+            </div>
+            <div style="margin-top:8px;">
+                <label>上传检查器 (.cpp)</label>
+                <input type="file" id="checker-file">
+                <button id="upload-checker">上传检查器</button>
+            </div>
+            <div id="upload-result" style="margin-top:8px;color:var(--muted);"></div>
+        </div>
+        <% } %>
+        <% /* 管理员的“设为精选”已集成为复选框到上方 */ %>
+    </div>
+</main>
+<script>
+    function renderPreview(){
+        const md = document.getElementById('description').value || '';
+        const html = marked.parse(md);
+        document.getElementById('preview').innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+        if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.getElementById('preview'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});
+    }
+    document.getElementById('description').addEventListener('input', renderPreview);
+    document.getElementById('background').addEventListener('input', renderPreview);
+    renderPreview();
+
+    document.getElementById('add-sample')?.addEventListener('click', ()=>{
+        const container = document.getElementById('sample-area');
+        const div = document.createElement('div'); div.className='sample-item';
+        div.innerHTML = '<input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" class="remove-sample">移除</button>';
+        container.appendChild(div);
+        div.querySelector('.remove-sample').addEventListener('click', ()=>div.remove());
+    });
+    // attach remove handlers to any existing sample items
+    document.querySelectorAll('#sample-area .remove-sample').forEach(btn=>btn.addEventListener('click', e=>{ e.target.closest('.sample-item').remove(); }));
+
+    document.getElementById('problem-form').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const form = e.target;
+        const data = new FormData(form);
+        // gather samples
+        const samples = [];
+        document.querySelectorAll('#sample-area .sample-item').forEach(si=>{
+            const inp = si.querySelector('input[name="sample_input"]')?.value || '';
+            const out = si.querySelector('input[name="sample_output"]')?.value || '';
+            if (inp || out) samples.push({input: inp, output: out});
+        });
+        const payload = {
+            title: form.title.value,
+            description: form.description.value,
+            background: form.background.value,
+            inputfmt: form.inputfmt.value,
+            outputfmt: form.outputfmt.value,
+            sample: JSON.stringify(samples)
+        };
+        // include opened/selected when present
+        const openedEl = form.querySelector('input[name="opened"]');
+        if (openedEl) payload.opened = openedEl.checked ? 1 : 0;
+        const selectedEl = form.querySelector('input[name="selected"]');
+        if (selectedEl) payload.selected = selectedEl.checked ? 1 : 0;
+        let url, method = 'POST';
+        <% if (problem) { %>
+        url = '/problem/edit/<%= problem.pid %>';
+        payload.id = '<%= problem.id %>';
+        <% if (admin) { %>
+        payload.pid = document.querySelector('input[name="pid"]')?.value;
+        <% } %>
+        <% } else { %>
+        url = '/problem/new';
+        <% } %>
+        const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        const j = await res.json();
+        if (j.status === 'Y') {
+            if (j.pid) alert('创建成功，题目 PID: ' + j.pid);
+            else alert('保存成功');
+            window.location.href = '/problem/list';
+        } else {
+            alert('操作失败: ' + (j.error||'未知错误'));
+        }
+    });
+
+    <% /* 管理员精选操作改为复选框提交到 /problem/edit */ %>
+
+    // 上传数据 & 检查器（仅在编辑页面出现）
+    <% if (typeof problem !== 'undefined' && problem) { %>
+    document.getElementById('upload-data').addEventListener('click', async ()=>{
+        const file = document.getElementById('data-file').files[0];
+        if (!file) return alert('请选择 ZIP 文件');
+        const fd = new FormData(); fd.append('file', file);
+        const res = await fetch(`/problem/<%= problem.id %>/upload-data`, { method: 'POST', body: fd });
+        const j = await res.json();
+        document.getElementById('upload-result').innerText = j.status === 'Y' ? j.message : ('上传失败: ' + (j.error||''));
+    });
+    document.getElementById('upload-checker').addEventListener('click', async ()=>{
+        const file = document.getElementById('checker-file').files[0];
+        if (!file) return alert('请选择 .cpp 文件');
+        const fd = new FormData(); fd.append('file', file);
+        const res = await fetch(`/problem/<%= problem.id %>/upload-checker`, { method: 'POST', body: fd });
+        const j = await res.json();
+        document.getElementById('upload-result').innerText = j.status === 'Y' ? j.message : ('上传失败: ' + (j.error||''));
+    });
+    <% } %>
+</script>
+</body>
+</html>

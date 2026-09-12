@@ -1,0 +1,193 @@
+/* ===== LZJOJ Modern UI - Base Styles (和谐美化) ===== */
+
+:root {
+  /* ----- 基础调色板 ----- */
+  --bg-deep: #0a0f1a;
+  --bg-primary: #0e1625;
+  --bg-secondary: #131c2f;
+  --bg-tertiary: rgba(255, 255, 255, 0.05);
+  --bg-card: rgba(255, 255, 255, 0.06);
+  --bg-card-hover: rgba(255, 255, 255, 0.10);
+  --bg-nav: rgba(10, 15, 26, 0.75);
+  --bg-modal: rgba(0, 0, 0, 0.6);
+
+  /* ----- 表格背景微调 ----- */
+  --bg-table-even: rgba(30, 40, 60, 0.4);
+  --bg-table-odd: rgba(20, 28, 45, 0.6);
+  --bg-table-hover: rgba(78, 161, 255, 0.12);
+
+  /* ----- 文本颜色 ----- */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.70);
+  --text-muted: rgba(255, 255, 255, 0.50);
+  --text-inverse: #0a0f1a;       /* 用于浅色背景上的深色文字 */
+  --text-link: #7cc4ff;
+  --text-link-hover: #a8ddff;
+
+  /* ----- 边框颜色 ----- */
+  --border-light: rgba(255, 255, 255, 0.10);
+  --border-medium: rgba(255, 255, 255, 0.16);
+  --border-heavy: rgba(255, 255, 255, 0.24);
+
+  /* ----- 主题色 ----- */
+  --primary: #4ea1ff;
+  --primary-light: #6cb2ff;
+  --primary-dark: #2a6fd6;
+  --accent: #5f7fbf;
+
+  /* ----- 状态色 ----- */
+  --success: #2ecc71;
+  --success-dark: #27ae60;
+  --danger: #e74c3c;
+  --danger-dark: #c0392b;
+  --warning: #f39c12;
+  --warning-dark: #e67e22;
+  --info: #3498db;
+
+  /* ----- 尺寸与特效 ----- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.35);
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+
+  /* ----- 滚动条 ----- */
+  --scrollbar-track: rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
+}
+
+/* 兼容旧变量名 */
+:root {
+  --bg: var(--bg-primary);
+  --bg2: var(--bg-secondary);
+  --card: var(--bg-card);
+  --card2: var(--bg-tertiary);
+  --border: var(--border-light);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --link: var(--text-link);
+  --link2: var(--text-link-hover);
+  --ok: var(--success);
+  --bad: var(--danger);
+  --radius: var(--radius-lg);
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--text-primary);
+  line-height: 1.6;
+  background: radial-gradient(ellipse at 20% 30%, rgba(78, 161, 255, 0.12), transparent 60%),
+              radial-gradient(ellipse at 80% 70%, rgba(124, 196, 255, 0.08), transparent 55%),
+              linear-gradient(135deg, var(--bg-deep) 0%, var(--bg-primary) 100%);
+  background-attachment: fixed;
+}
+
+.page {
+  padding: 28px 20px 56px;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+
+h1, h2, h3, h4 {
+  margin: 0 0 0.75rem 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffffff, var(--primary-light));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+h2 {
+  font-size: clamp(20px, 2.5vw, 28px);
+  color: var(--text-secondary);
+  border-left: 3px solid var(--primary);
+  padding-left: 12px;
+}
+
+h3 {
+  font-size: 1.4rem;
+  color: var(--text-primary);
+}
+
+h4 {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+}
+
+a {
+  color: var(--text-link);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--text-link-hover);
+  text-decoration: underline;
+}
+
+hr {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-medium), transparent);
+  margin: 24px 0;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.important-content {
+  color: #ffb4aa;
+  text-decoration: underline wavy rgba(255, 180, 170, 0.7);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}

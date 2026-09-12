@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评测列表 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <style>
+        .search-form {
+            background: #1e1e2e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .search-group {
+            flex: 1;
+            min-width: 180px;
+        }
+        .search-group label {
+            display: block;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .search-group input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #2a2a3a;
+            border: 1px solid #3a3a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .search-group input:focus {
+            outline: none;
+            border-color: #4ea1ff;
+            background: #2f2f3f;
+        }
+        .search-group input::placeholder {
+            color: #666;
+        }
+        .search-btn {
+            background: #4ea1ff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+            height: 42px;
+        }
+        .search-btn:hover {
+            background: #3a8be0;
+        }
+        .reset-btn {
+            background: #3a3a4a;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s;
+            height: 42px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }
+        .reset-btn:hover {
+            background: #4a4a5a;
+            color: white;
+            text-decoration: none;
+        }
+        .submissions-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a2a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .submissions-table th,
+        .submissions-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #2a2a3a;
+        }
+        .submissions-table th {
+            background: #151525;
+            color: #aaa;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        .submissions-table tr:hover td {
+            background: #1f1f2f;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-AC { background: #2a6b3c; color: #8bffbc; }
+        .status-WA { background: #8b3a3a; color: #ffaaaa; }
+        .status-TLE { background: #8b6b2a; color: #ffe08a; }
+        .status-MLE { background: #6b3a8b; color: #e0aaff; }
+        .status-RE, .status-SE { background: #8b3a6b; color: #ffb8e0; }
+        .status-CE { background: #5a5a6a; color: #ccc; }
+        .status-pending, .status-compiling, .status-judging { background: #3a5a8b; color: #aad4ff; }
+        .status-finished { background: #2a5a3a; color: #8bffbc; }
+        .submission-link {
+            color: #4ea1ff;
+            text-decoration: none;
+        }
+        .submission-link:hover {
+            text-decoration: underline;
+        }
+        .info-note {
+            background: #1e1e2e;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #888;
+            border-left: 3px solid #4ea1ff;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            color: #888;
+            background: #1a1a2a;
+            border-radius: 12px;
+        }
+        .pagination a {
+            display: inline-block;
+            padding: 8px 14px;
+            margin: 0 4px;
+            border-radius: 8px;
+            background: #1e1e2e;
+            color: #ccc;
+            text-decoration: none;
+        }
+        .pagination a.active {
+            background: #4ea1ff;
+            color: white;
+        }
+        .pagination a:hover:not(.active) {
+            background: #2a2a3a;
+        }
+        .record-count {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>提交记录</h1>
+            
+            <!-- 图形化搜索表单 -->
+            <form class="search-form" method="get" action="/record/list">
+                <div class="search-group">
+                    <label>👤 用户名</label>
+                    <input type="text" name="username" placeholder="输入用户名（仅显示公开代码用户）" value="<%= username %>">
+                </div>
+                <div class="search-group">
+                    <label>📝 题目编号</label>
+                    <input type="text" name="pid" placeholder="例如: P1000" value="<%= pid %>">
+                </div>
+                <button type="submit" class="search-btn">🔍 查询</button>
+                <a href="/record/list" class="reset-btn">重置</a>
+            </form>
+            
+            <% if (username || pid) { %>
+            <div class="info-note">
+                📌 当前筛选条件：
+                <% if (username) { %>用户名: <strong><%= username %></strong><% } %>
+                <% if (username && pid) { %> &nbsp;|&nbsp; <% } %>
+                <% if (pid) { %>题目: <strong><%= pid %></strong><% } %>
+                &nbsp; <span style="color:#4ea1ff;">(共 <%= total %> 条记录)</span>
+            </div>
+            <% } else { %>
+            <div class="info-note">
+                📌 显示所有公开代码用户的提交记录。你也可以通过上方表单筛选特定用户或题目的提交。
+            </div>
+            <% } %>
+            
+            <% if (submissions && submissions.length > 0) { %>
+                <div class="record-count">共 <%= total %> 条记录，第 <%= page %>/<%= totalPages %> 页</div>
+                <table class="submissions-table">
+                    <thead>
+                        <tr>
+                            <th>提交ID</th>
+                            <th>题目</th>
+                            <th>用户</th>
+                            <th>状态</th>
+                            <th>提交时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% submissions.forEach(sub => { %>
+                            <tr>
+                                <td>#<%= sub.id %></td>
+                                <td><a href="/problem/<%= sub.pid %>" class="submission-link"><%= sub.pid %></a></td>
+                                <td>
+                                    <a href="/profile/<%= sub.username %>" class="submission-link" style="color: <%= sub.name_color || (sub.role === 'admin' || sub.role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>">
+                                        <img src="/api/avatar/<%= encodeURIComponent(sub.username) %>" class="avatar" alt="avatar"> <%= sub.username %>
+                                    </a>
+                                    <% if (sub.badge) { %>
+                                        <span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= sub.badge %></span>
+                                    <% } %>
+                                    <% if (sub.isOwn) { %>
+                                        <span style="color:#4ea1ff; font-size:11px; margin-left:6px;">(你)</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-<%= sub.status.split('-')[0] === 'AC' ? 'AC' : 
+                                        (sub.status === 'WA' ? 'WA' : 
+                                        (sub.status === 'TLE' ? 'TLE' : 
+                                        (sub.status === 'MLE' ? 'MLE' : 
+                                        (sub.status === 'RE' ? 'RE' : 
+                                        (sub.status === 'CE' ? 'CE' : 
+                                        (sub.status === 'SE' ? 'SE' : 
+                                        (['pending','compiling','judging'].includes(sub.status) ? 'pending' : 'finished'))))))) %>">
+                                        <%= sub.statusText %>
+                                    </span>
+                                </td>
+                                <td><%= new Date(sub.submit_time).toLocaleString('zh-CN') %></td>
+                                <td><a href="/record/<%= sub.id %>" class="submission-link">查看详情</a></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+                
+                <div class="pagination" style="margin-top: 24px; display: flex; justify-content: center; flex-wrap: wrap;">
+                    <% if (page > 1) { %>
+                        <a href="?page=<%= page-1 %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= pid ? '&pid='+encodeURIComponent(pid) : '' %>">上一页</a>
+                    <% } %>
+                    <% 
+                        let startPage = Math.max(1, page - 4);
+                        let endPage = Math.min(totalPages, page + 4);
+                        for (let i = startPage; i <= endPage; i++) { 
+                    %>
+                        <a href="?page=<%= i %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= pid ? '&pid='+encodeURIComponent(pid) : '' %>" class="<%= i === page ? 'active' : '' %>"><%= i %></a>
+                    <% } %>
+                    <% if (page < totalPages) { %>
+                        <a href="?page=<%= page+1 %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= pid ? '&pid='+encodeURIComponent(pid) : '' %>">下一页</a>
+                    <% } %>
+                </div>
+            <% } else { %>
+                <div class="empty-state">
+                    <span style="font-size: 48px;">📭</span>
+                    <p style="margin-top: 16px;">
+                        <% if (username || pid) { %>
+                            没有找到符合条件的提交记录。
+                            <% if (username && (!user || user.username !== username)) { %>
+                                <br><small>提示：该用户可能未公开代码，或用户不存在。</small>
+                            <% } %>
+                        <% } else { %>
+                            暂无提交记录。
+                        <% } %>
+                    </p>
+                    <a href="/record/list" style="color: #4ea1ff; text-decoration: none;">查看全部记录</a>
+                </div>
+            <% } %>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+</body>
+</html>

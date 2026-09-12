@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人设置 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>个人设置</h1>
+            <form id="info-form" class="card form-card">
+                <label for="usrname">用户名:</label>
+                <input type="text" id="usrname" name="usrname" required>
+                <label for="pubcode">公开代码：</label>
+                <select id="pubcode" name="pubcode" required style="color: black; background-color: rgba(234, 244, 255, 0.32);">
+                    <option value="yes">是</option>
+                    <option value="no">否</option>
+                </select>
+                <label for="slogan">签名:</label>
+                <input type="text" id="slogan" name="slogan">
+                <label for="paswd">新密码 (留空则不修改):</label>
+                <input type="password" id="paswd" name="paswd">
+                <label for="old_paswd">若修改密码，请输入原密码以确认:</label>
+                <input type="password" id="old_paswd" name="old_paswd">
+                <button type="submit">保存修改</button>
+            </form>
+            <div class="card" style="margin-top:16px; padding:12px;">
+                <h3>个人主页</h3>
+                <p>你可以编辑自己的个人主页，支持 Markdown 与 LaTeX 公式。</p>
+                <textarea id="profile_markdown" rows="8" style="width:100%;"></textarea>
+                <div style="margin-top:8px;display:flex;gap:8px;"><button id="saveProfileBtn" class="btn">保存个人主页</button><div id="profileMsg"></div></div>
+            </div>
+            <div class="card" style="margin-top:16px; padding:12px;">
+                <h3>头像</h3>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <img id="currentAvatar" src="/api/avatar/<%= user.username %>" class="avatar avatar-lg">
+                    <div>
+                        <input type="file" id="avatarFile" accept="image/*"><br><br>
+                        <button id="uploadAvatarBtn" class="btn">上传新头像</button>
+                        <div id="avatarMsg" style="margin-top:8px"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="info-message" style="margin-top: 10px;"></div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        // 加载用户当前信息
+        (async () => {
+            const cookie = getcookie();
+            const resp = await fetch(`/api/getinfoshort?key=${cookie}`);
+            const data = await resp.json();
+            if (data.status === 'Y') {
+                document.getElementById('usrname').value = data.username;
+                document.getElementById('pubcode').value = data.pubcode || '';
+                document.getElementById('slogan').value = data.slogan || '';
+                // 加载个人主页内容
+                try {
+                    const pResp = await fetch(`/api/profile/${data.username}`);
+                    const pjson = await pResp.json();
+                    if (pjson.status === 'Y') {
+                        document.getElementById('profile_markdown').value = pjson.markdown || '';
+                    }
+                } catch (e) { }
+            }
+        })();
+        document.getElementById('info-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const usrname = document.getElementById('usrname').value;
+            const pubcode = document.getElementById('pubcode').value;
+            const slogan = document.getElementById('slogan').value;
+            const paswd = document.getElementById('paswd').value;
+            const old_paswd = document.getElementById('old_paswd').value;
+            const cookie = getcookie();
+            const resp = await fetch('/api/updinfoshort', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cookie, usrname, paswd, old_paswd, publiccode: pubcode, slogan })
+            });
+            const data = await resp.json();
+            const msgDiv = document.getElementById('info-message');
+            if (data.status === 'Y') {
+                msgDiv.textContent = '修改成功！页面将刷新...';
+                msgDiv.style.color = 'green';
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                msgDiv.textContent = '修改失败: ' + data.error;
+                msgDiv.style.color = 'red';
+            }
+        });
+        // 保存个人主页
+        document.getElementById('saveProfileBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            const md = document.getElementById('profile_markdown').value;
+            const resp = await fetch('/api/profile/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ markdown: md }) });
+            const j = await resp.json();
+            const msg = document.getElementById('profileMsg');
+            if (j.status === 'Y') { msg.textContent = '保存成功'; msg.style.color = 'green'; } else { msg.textContent = '保存失败: ' + (j.error||''); msg.style.color='red'; }
+        });
+        // 头像上传
+        document.getElementById('uploadAvatarBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            const f = document.getElementById('avatarFile').files[0];
+            const msg = document.getElementById('avatarMsg');
+            if (!f) { msg.textContent = '请选择图片'; msg.style.color='red'; return; }
+            const fd = new FormData(); fd.append('avatar', f);
+            try {
+                const resp = await fetch('/api/upload-avatar', { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (data.status === 'Y') {
+                    msg.textContent = '上传成功'; msg.style.color='green';
+                    document.getElementById('currentAvatar').src = data.url + '?t=' + Date.now();
+                } else { msg.textContent = '上传失败: ' + (data.error||''); msg.style.color='red'; }
+            } catch (err) {
+                msg.textContent = '上传出错'; msg.style.color='red';
+            }
+        });
+    </script>
+</body>
+</html>

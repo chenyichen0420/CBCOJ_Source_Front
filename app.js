@@ -6,7 +6,7 @@ const logger = require('./logger');
 const os = require('os');
 const { requireLogin, requireAdmin, checkAdmin, getUserByCookie, checkPermission } = require('./auth');
 const cheerio = require('cheerio');
-const { SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD, DISK_ROOT } = require('./config');
+// const { SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD, DISK_ROOT } = require('./config');
 const { validateInt, validateString, validateEmail } = require('./validation');
 
 const app = express();
@@ -52,6 +52,9 @@ const ipRequestCounts = new Map(); // ip -> [timestamps]
 
 // 检查请求 IP 是否在黑名单中
 app.use(async (req, res, next) => {
+    next();
+    return;
+    //temporaly disabled
     try {
         const ip = logger.getClientIp(req);
         /*
@@ -212,6 +215,8 @@ function sanitizeHtmlServer(html) {
 }
 
 async function getStatistics() {
+    return [0, 0, 0, 0];
+    //temporaly disabled
     try {
         /*
         DB Interface, waiting for implement
@@ -636,11 +641,11 @@ app.get('/admin', async (req, res) => {
 // ---------- API 路由（保持不变） ----------
 app.use('/api', require('./routes/academic'));
 app.use('/api', require('./routes/user'));
-app.use('/api', require('./routes/community'));
-app.use('/api', require('./routes/admin'));
-app.use('/api/contests', require('./routes/contest'));
-app.use('/api/profile', require('./routes/profile'));
-app.use('/api/disk', require('./routes/disk'));
+// app.use('/api', require('./routes/community'));
+// app.use('/api', require('./routes/admin'));
+// app.use('/api/contests', require('./routes/contest'));
+// app.use('/api/profile', require('./routes/profile'));
+// app.use('/api/disk', require('./routes/disk'));
 
 // ---------- 静态资源（CSS, JS, 图片等） ----------
 app.use('/assets', express.static(path.join(__dirname, 'webpage/assets')));
@@ -670,10 +675,10 @@ app.use((req, res) => {
 
 // ---------- 启动服务器 ----------
 async function ensureDirs() {
-    const dirs = [SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD];
-    for (const d of dirs) {
-        await fs.promises.mkdir(d, { recursive: true });
-    }
+    // const dirs = [SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD];
+    // for (const d of dirs) {
+    //     await fs.promises.mkdir(d, { recursive: true });
+    // }
 }
 
 /*

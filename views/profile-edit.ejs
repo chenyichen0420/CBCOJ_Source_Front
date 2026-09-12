@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑个人主页 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+    <script src="/assets/marked.min.js"></script>
+    <script src="/assets/purify.min.js"></script>
+    <script src="/assets/katex.min.js"></script>
+    <script src="/assets/auto-render.min.js"></script>
+    <style>
+        .edit-container { max-width: 800px; margin: 0 auto; }
+        textarea { width: 100%; height: 400px; padding: 10px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-primary); border-radius: 4px; resize: vertical; }
+        .preview { margin-top: 20px; background: var(--bg-secondary); padding: 15px; border-radius: 8px; border: 1px solid var(--border); }
+        .preview h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container edit-container">
+            <h1>编辑个人主页</h1>
+            <p>支持 Markdown 语法，你可以写下你的算法心得、竞赛经历等。</p>
+            <form id="profile-form" method="post" action="/api/profile/edit">
+                <div class="form-group">
+                    <label for="markdown">内容</label>
+                    <textarea id="markdown" name="markdown" placeholder="写点什么..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn" id="previewBtn">预览</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <a href="/profile/<%= user.username %>" class="btn" id="viewLink">查看我的主页</a>
+                </div>
+            </form>
+            <div id="preview" class="preview" style="display:none;">
+                <h3>预览</h3>
+                <div id="previewContent"></div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        // 加载已有内容
+        (async () => {
+            const cookie = getcookie();
+            const resp = await fetch(`/api/profile/${encodeURIComponent('<%= user.username %>')}`);
+            const data = await resp.json();
+            if (data.status === 'Y' && data.markdown) {
+                document.getElementById('markdown').value = data.markdown;
+            }
+        })();
+        document.getElementById('previewBtn').addEventListener('click', () => {
+            const md = document.getElementById('markdown').value;
+            const previewDiv = document.getElementById('preview');
+            const contentDiv = document.getElementById('previewContent');
+            const html = marked.parse(md || '');
+            contentDiv.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(contentDiv, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ],
+                    throwOnError: false
+                });
+            }
+            previewDiv.style.display = 'block';
+        });
+        document.getElementById('profile-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const markdown = document.getElementById('markdown').value;
+            const cookie = getcookie();
+            const resp = await fetch('/api/profile/edit?cookie=' + cookie, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ markdown })
+            });
+            const data = await resp.json();
+            if (data.status === 'Y') {
+                alert('保存成功');
+                window.location.href = `/profile/${encodeURIComponent('<%= user.username %>')}`;
+            } else {
+                alert('保存失败: ' + (data.error || '未知错误'));
+            }
+        });
+        // 如果页面加载时显示预览内容也渲染公式
+        document.addEventListener('DOMContentLoaded', () => {
+            const preview = document.getElementById('previewContent');
+            if (preview && preview.innerHTML && typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(preview, { delimiters: [ {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true} ], throwOnError: false });
+            }
+        });
+    </script>
+</body>
+</html>

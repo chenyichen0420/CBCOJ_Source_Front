@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题库 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>题库</h1>
+            <div style="margin-bottom:12px; text-align:right;">
+                <% if (user) { %>
+                    <a href="/problem/me" class="btn" style="background:var(--primary);color:#fff;padding:6px 10px;border-radius:6px;">我的题目</a>
+                    <a href="/problem/new" class="btn" style="background:var(--primary);color:#fff;padding:6px 10px;border-radius:6px;">创建题目</a>
+                <% } %>
+            </div>
+            <div id="problemlist">
+                <% problems.forEach(problem => { %>
+                    <div class="problem">
+                        <a href="/problem/<%= problem.pid %>"><%= problem.title %></a>
+                    </div>
+                <% }) %>
+            </div>
+            <div class="pagination" id="pagination">
+                <% for (let i = 1; i <= totalPages; i++) { %>
+                    <a href="/problem/list?page=<%= i %>" style="<%= i === page ? 'background: rgba(78,161,255,.24);' : '' %>"><%= i %></a>
+                <% } %>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+</body>
+</html>

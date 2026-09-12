@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - LZJOJ</title>
+    <link rel="stylesheet" href="/assets/base.css">
+    <link rel="stylesheet" href="/assets/components.css">
+    <link rel="stylesheet" href="/assets/layout.css">
+</head>
+<body>
+    <nav>
+        <div class="nav-left"><%- navigation %></div>
+        <div class="nav-right">
+            <div class="login-content">
+                <div id="login-area"></div>
+                <div id="login-status">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText">正在检测登录状态...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="page">
+        <div class="container">
+            <h1>注册账号 - LZJOJ</h1>
+            <div class="home-layout">
+                <div class="left card">
+                    <h2>🚀 欢迎注册 LZJOJ</h2>
+                    <p>请填写以下信息以创建您的 LZJOJ 账号，加入我们一起探索编程的乐趣！</p>
+                    <form class="register-form" id="register-form">
+                        <div class="form-group">
+                            <label for="username">用户名</label>
+                            <input type="text" id="username" required>
+                            <label for="password">密码</label>
+                            <input type="password" id="password" required>
+                            <label for="email">邮箱</label>
+                            <input type="email" id="email" required>
+                            <button type="button" class="btn" id="sendCodeButton">发送验证代码到邮箱</button>
+                            <label for="code">验证代码</label>
+                            <input type="text" id="code" required>
+                        </div>
+                        <button type="submit" class="btn">注册</button>
+                    </form>
+                </div>
+                <div class="right card">
+                    <h2>注册流程</h2>
+                    <ol>
+                        <li>填写注册表单，提供用户名、密码和邮箱</li>
+                        <li>点击发送验证代码，系统会向您的邮箱发送验证码</li>
+                        <li>填入验证码后点击注册</li>
+                        <li>注册成功后，您可以立即登录并开始使用 LZJOJ 的各种功能</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script>
+        let token = '';
+        document.getElementById('sendCodeButton').addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            if (!email || !username || !password) { alert('请先填写完整信息'); return; }
+            const resp = await fetch(`/api/genregtoken?email=${encodeURIComponent(email)}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+            const data = await resp.json();
+            if (data.status === 'Y') {
+                alert('验证代码已发送到您的邮箱');
+                token = data.token;
+            } else {
+                alert('发送失败: ' + data.error);
+            }
+        });
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!token) { alert('请先发送验证代码'); return; }
+            const code = document.getElementById('code').value;
+            const resp = await fetch(`/api/verifycode?code=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`);
+            const data = await resp.json();
+            if (data.status === 'Y') {
+                alert('注册成功！请登录');
+                window.location.href = '/login';
+            } else {
+                alert('注册失败，请重试');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -4,16 +4,12 @@ const pool = require('../db');
 const { requireLogin, requireAdmin, requirePermission, checkPermission } = require('../auth');
 const fs = require('fs').promises;
 const path = require('path');
-const { exec } = require('child_process');
 const util = require('util');
-const execPromise = util.promisify(exec);
 const multer = require('multer');
 const upload = multer();
-
-const { SUBMIT_ROOT, COMPILE_ROOT } = require('../config');
 const { validateInt, validateString } = require('../validation');
 
-router.get('/getproblem', requireAdmin, async (req, res) => {
+router.get('/getproblem', requireLogin, async (req, res) => {
     const pid = req.query.pid;
     const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
     if (pidErr) return res.status(400).json({ status: 'N', error: `pid: ${pidErr}` });
@@ -32,7 +28,7 @@ router.get('/getproblem', requireAdmin, async (req, res) => {
     */
 });
 
-router.post('/getproblemlist', requireAdmin, express.json(), async (req, res) => {
+router.post('/getproblemlist', requireLogin, express.json(), async (req, res) => {
     let page = parseInt(req.body.page);
     if (isNaN(page) || page < 1) page = 1;
     if (page !== 1) {
@@ -82,7 +78,7 @@ router.post('/submit', requireLogin, upload.none(), requirePermission('can_submi
     */
 });
 
-router.get('/recordlist', requireAdmin, requireLogin, async (req, res) => {
+router.get('/recordlist', requireLogin, async (req, res) => {
     const target = req.query.target;
     let page = parseInt(req.query.page) || 1;
     if (req.query.page !== undefined) {
@@ -107,7 +103,7 @@ router.get('/recordlist', requireAdmin, requireLogin, async (req, res) => {
     */
 });
 
-router.get('/record', requireLogin, requireAdmin, async (req, res) => {
+router.get('/record', requireLogin, async (req, res) => {
     const rid = req.query.rid;
     const user = req.user;
     const ridErr = validateString(rid, { minLen: 1, maxLen: 50 });
@@ -135,6 +131,100 @@ function statusToCode(status) {
     const map = { AC:200, WA:406, TLE:408, MLE:413, RE:502, CE:400, SE:500, PD:202, JG:206 };
     return map[status] || 404;
 }
+
+// 用户新建题目（默认不公开 opened=0，selected=0），入口在题目列表
+router.post('/problem/new', requirePermission('can_manage_problems'), upload.none(), async (req, res) => {
+    const user = req.user;
+    const { title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, selected } = req.body;
+    const titleErr = validateString(title, { minLen: 1, maxLen: 200 });
+    if (titleErr) return res.json({ status: 'N', error: `title: ${titleErr}` });
+    const descErr = validateString(description, { minLen: 1 });
+    if (descErr) return res.json({ status: 'N', error: `description: ${descErr}` });
+    /*
+    DB Interface, waiting for implement
+
+    Input: title (string), background (string), description (string), inputfmt (string),
+            outputfmt (string), hint (string), timelm (int), memlm (int),
+            datacount (int), sample (JSON array), selected (int 0/1), user (from auth)
+    Output: { status: 'Y', pid: string } | { status: 'N', error: string }
+
+    Expected middleware behavior:
+    - Auto-generate next available numeric pid
+    - Create new problem with provided fields
+    - Set author to current user's username
+    - Set opened=0 (not public by default)
+    - Set selected=0 (not featured by default)
+    - Return the assigned pid
+    */
+});
+
+// 用户上传数据包（仅题目作者或有权限的用户）
+const uploadZipUser = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const tempDir = '/tmp/oj_upload_temp';
+            fs.mkdirSync(tempDir, { recursive: true });
+            cb(null, tempDir);
+        },
+        filename: (req, file, cb) => {
+            const unique = `${req.params.id}-${Date.now()}.zip`;
+            cb(null, unique);
+        }
+    }),
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
+            cb(null, true);
+        } else {
+            cb(new Error('只允许上传 ZIP 文件'));
+        }
+    }
+});
+
+router.post('/problem/:id/upload-data', requirePermission('can_manage_problems'), uploadZipUser.single('file'), async (req, res) => {
+    const problemId = req.params.id;
+    const idErr = validateInt(problemId, { positive: true });
+    if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
+    const file = req.file;
+    if (!file) return res.status(400).json({ status: 'N', error: '未选择文件' });
+    /*
+    DB Interface, waiting for implement
+
+    Input: problemId (int), file (multipart zip), user (from auth)
+    Output: { status: 'Y', message: string, data_path: string } | { status: 'N', error: string }
+
+    Expected middleware behavior:
+    - Verify user has permission (author or admin)
+    - Extract ZIP file contents to problem data directory
+    - Update problem's data_path field
+    - Return success with data_path
+    */
+});
+
+// 作者或管理员编辑题目
+router.post('/problem/edit', requirePermission('can_manage_problems'), upload.none(), async (req, res) => {
+    const user = req.user;
+    const { id, pid, title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, opened, selected } = req.body;
+    const idErr = validateInt(id, { positive: true });
+    if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });
+    /*
+    DB Interface, waiting for implement
+
+    Input: id (int, required), pid (string, optional, admin only), title (string, optional),
+            background (string, optional), description (string, optional),
+            inputfmt (string, optional), outputfmt (string, optional),
+            hint (string, optional), timelm (int, optional), memlm (int, optional),
+            datacount (int, optional), sample (JSON array, optional),
+            opened (int 0/1, optional), selected (int 0/1, optional, admin only),
+            user (from auth)
+    Output: { status: 'Y' } | { status: 'N', error: string }
+
+    Expected middleware behavior:
+    - Verify user has permission (author or admin)
+    - Only admin can modify pid and selected fields
+    - Update only the provided fields
+    - Return success or error
+    */
+});
 
 module.exports = router;
 

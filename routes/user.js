@@ -3,18 +3,14 @@ const express = require('express');
 const router = express.Router();
 const { packParams, parsePack } = require('../db');
 const pool = require('../db');
-const { getUserByCookie, requireLogin, requireAdmin, getUserPermissions } = require('../auth');
+const { getUserByCookie, requireLogin, getUserPermissions, requirePermission } = require('../auth');
 const logger = require('../logger');
-const crypto = require('crypto');
 const multer = require('multer');
 const upload = multer();
 const fs = require('fs');
 const path = require('path');
 const AdmZip = require('adm-zip');
-const { exec } = require('child_process');
 const util = require('util');
-const execPromise = util.promisify(exec);
-const os = require('os');
 // const { DATA_ROOT, CHECKER_ROOT } = require('../config');
 const { validateInt, validateString, validateEmail, validateBoolean } = require('../validation');
 
@@ -184,6 +180,8 @@ var reglasttime = {};
 
 // 生成注册验证码
 router.get('/genregtoken', async (req, res) => {
+    return res.json({status:'N',error:"register not supported currently"});
+    //暂时不支持注册用户
     const { email, username, password } = req.query;
     const emErr = validateEmail(email);
     if (emErr) return res.json({ status: 'N', error: `email: ${emErr}` });
@@ -216,13 +214,14 @@ router.get('/genregtoken', async (req, res) => {
 
 // 验证注册码并创建用户
 router.get('/verifycode', async (req, res) => {
+    return res.json({status:'N',error:"register not supported currently"});
+    //暂时不支持注册用户
     const { code, token } = req.query;
     const ip = logger.getClientIp(req);
     const codeErr = validateString(code, { minLen: 1, maxLen: 50 });
     if (codeErr) return res.json({ status: 'N', error: `code: ${codeErr}` });
     const tkErr = validateString(token, { minLen: 1, maxLen: 100 });
     if (tkErr) return res.json({ status: 'N', error: `token: ${tkErr}` });
-
     /*
     DB Interface, waiting for implement
 
@@ -244,6 +243,8 @@ router.get('/verifycode', async (req, res) => {
 
 // 头像上传
 router.post('/upload-avatar', requireLogin, upload.single('avatar'), async (req, res) => {
+    return res.json({ status: 'N', error: '保存失败' });
+    //暂时不支持自定义头像
     try {
         if (!req.file) return res.json({ status: 'N', error: 'Missing file' });
         const username = req.user.username;
@@ -323,6 +324,13 @@ function generateBlueBackgroundCharSVG(char, options = {}) {
 
 // 返回头像（如果有则直接返回静态文件，否则返回动态 SVG）
 router.get('/avatar/:username', async (req, res) => {
+    // 返回动态 SVG
+    const initial = (username && username[0]) ? username[0].toUpperCase() : '?';
+    const svg = generateBlueBackgroundCharSVG(initial, { width: 80, height: 80 });
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.send(svg);
+    return;
+    //暂时不支持自定义头像
     const username = req.params.username;
     const unErr = validateString(username, { minLen: 1, maxLen: 100 });
     if (unErr) return res.status(400).json({ status: 'N', error: `username: ${unErr}` });
@@ -332,142 +340,6 @@ router.get('/avatar/:username', async (req, res) => {
         const p = path.join(avatarDir, `${username}.${e}`);
         if (fs.existsSync(p)) return res.sendFile(p);
     }
-    // 返回动态 SVG
-    const initial = (username && username[0]) ? username[0].toUpperCase() : '?';
-    const svg = generateBlueBackgroundCharSVG(initial, { width: 80, height: 80 });
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.send(svg);
-});
-
-// 用户新建题目（默认不公开 opened=0，selected=0），入口在题目列表
-router.post('/problem/new', requireLogin, upload.none(), async (req, res) => {
-    const user = req.user;
-    const { title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, selected } = req.body;
-    const titleErr = validateString(title, { minLen: 1, maxLen: 200 });
-    if (titleErr) return res.json({ status: 'N', error: `title: ${titleErr}` });
-    const descErr = validateString(description, { minLen: 1 });
-    if (descErr) return res.json({ status: 'N', error: `description: ${descErr}` });
-    /*
-    DB Interface, waiting for implement
-
-    Input: title (string), background (string), description (string), inputfmt (string),
-            outputfmt (string), hint (string), timelm (int), memlm (int),
-            datacount (int), sample (JSON array), selected (int 0/1), user (from auth)
-    Output: { status: 'Y', pid: string } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Auto-generate next available numeric pid
-    - Create new problem with provided fields
-    - Set author to current user's username
-    - Set opened=0 (not public by default)
-    - Set selected=0 (not featured by default)
-    - Return the assigned pid
-    */
-});
-
-// 用户上传数据包（仅题目作者或有权限的用户）
-const uploadZipUser = multer({
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => {
-            const tempDir = '/tmp/oj_upload_temp';
-            fs.mkdirSync(tempDir, { recursive: true });
-            cb(null, tempDir);
-        },
-        filename: (req, file, cb) => {
-            const unique = `${req.params.id}-${Date.now()}.zip`;
-            cb(null, unique);
-        }
-    }),
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
-            cb(null, true);
-        } else {
-            cb(new Error('只允许上传 ZIP 文件'));
-        }
-    }
-});
-
-router.post('/problem/:id/upload-data', requireLogin, uploadZipUser.single('file'), async (req, res) => {
-    const problemId = req.params.id;
-    const idErr = validateInt(problemId, { positive: true });
-    if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
-    const file = req.file;
-    if (!file) return res.status(400).json({ status: 'N', error: '未选择文件' });
-    /*
-    DB Interface, waiting for implement
-
-    Input: problemId (int), file (multipart zip), user (from auth)
-    Output: { status: 'Y', message: string, data_path: string } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Verify user has permission (author or admin)
-    - Extract ZIP file contents to problem data directory
-    - Update problem's data_path field
-    - Return success with data_path
-    */
-});
-
-// 用户上传 checker（仅题目作者或有权限的用户），要求 .cpp
-const uploadCheckerUser = multer({
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => {
-            fs.mkdirSync(CHECKER_ROOT, { recursive: true });
-            cb(null, CHECKER_ROOT);
-        },
-        filename: (req, file, cb) => {
-            const safeName = `${req.params.id}-${file.originalname}`;
-            cb(null, safeName);
-        }
-    })
-});
-
-router.post('/problem/:id/upload-checker', requireLogin, uploadCheckerUser.single('file'), async (req, res) => {
-    const problemId = req.params.id;
-    const idErr = validateInt(problemId, { positive: true });
-    if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
-    const file = req.file;
-    if (!file) return res.status(400).json({ status: 'N', error: '未选择文件' });
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ext !== '.cpp') { fs.unlinkSync(file.path); return res.status(400).json({ status: 'N', error: '只允许上传 .cpp 文件' }); }
-    /*
-    DB Interface, waiting for implement
-
-    Input: problemId (int), file (multipart .cpp), user (from auth)
-    Output: { status: 'Y', message: string, checker_path: string } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Verify user has permission (author or admin)
-    - Compile the .cpp file with g++ (requires testlib.h)
-    - Store compiled checker in CHECKER_ROOT
-    - Update problem's checker_path field
-    - Return success with checker_path
-    */
-});
-
-// 作者或管理员编辑题目
-router.post('/problem/edit', requireLogin, upload.none(), async (req, res) => {
-    const user = req.user;
-    const { id, pid, title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, opened, selected } = req.body;
-    const idErr = validateInt(id, { positive: true });
-    if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });
-    /*
-    DB Interface, waiting for implement
-
-    Input: id (int, required), pid (string, optional, admin only), title (string, optional),
-            background (string, optional), description (string, optional),
-            inputfmt (string, optional), outputfmt (string, optional),
-            hint (string, optional), timelm (int, optional), memlm (int, optional),
-            datacount (int, optional), sample (JSON array, optional),
-            opened (int 0/1, optional), selected (int 0/1, optional, admin only),
-            user (from auth)
-    Output: { status: 'Y' } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Verify user has permission (author or admin)
-    - Only admin can modify pid and selected fields
-    - Update only the provided fields
-    - Return success or error
-    */
 });
 
 module.exports = router;
@@ -487,11 +359,10 @@ module.exports = router;
 | `/verifycode` | GET | 替换原 `pool.query` | 验证码验证 + 用户创建 |
 | `/problem/new` | POST | 替换原 `pool.query` | 创建新题目 |
 | `/problem/:id/upload-data` | POST | 替换原 `pool.query` | 上传题目数据包 |
-| `/problem/:id/upload-checker` | POST | 替换原 `pool.query` | 上传并编译检查器 |
+| `/problem/:id/upload-checker` | POST | 属于题目数据包，已经删除 | 上传并编译检查器 |
 | `/problem/edit` | POST | 替换原 `pool.query` | 编辑题目 |
 
-**未标注的接口**（保持不变）：
-- `/mypermissions` — 调用 `auth.getUserPermissions`，与数据库无关
+**未标注的接口**（逻辑需要大改）：
 - `/upload-avatar` — 纯文件操作
 - `/avatar/:username` — 纯文件操作
 */

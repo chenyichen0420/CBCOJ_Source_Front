@@ -197,12 +197,7 @@ async function checkAdmin(req) {
     if (!cookie) return false;
     const user = await getUserByCookie(cookie);
     if (!user) return false;
-    if (user.role === 'admin' || user.role === 'superadmin') return true;
-    return (
-        (await checkPermission(user.id, 'can_manage_users')) ||
-        (await checkPermission(user.id, 'can_manage_problems')) ||
-        (await checkPermission(user.id, 'can_manage_contests')) ||
-        (await checkPermission(user.id, 'can_manage_disk')));
+    return (user.role === 'admin' || user.role === 'superadmin');
 }
 
 async function requireAdmin(req, res, next) {

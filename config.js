@@ -7,8 +7,10 @@ const DEFAULT_CONFIG = {
     middleware: {
         host: '127.0.0.1',
         accountPort: 8640,
-        hackPort: 8643,
         judgePort: 8641,
+        updatePort: 8642,
+        hackPort: 8643,
+        appPort: 8630,
         requestTimeout: 3000,
         connectTimeout: 2000,
         maxRetries: 3,
@@ -55,6 +57,8 @@ function loadConfig() {
     }
 
     const config = deepMerge(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), userConfig);
+
+    console.log('Final config: ' + JSON.stringify(config, null, 2))
 
     // 环境变量覆盖（可选）
     // if (process.env.CBCOJ_HOST) config.middleware.host = process.env.CBCOJ_HOST;

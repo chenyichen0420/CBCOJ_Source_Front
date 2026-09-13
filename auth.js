@@ -250,4 +250,14 @@ async function optionalAuth(req, res, next) {
     next();
 }
 
-module.exports = { requireLogin, requireAdmin, requirePermission, optionalAuth, checkPermission, checkAdmin, getUserPermissions, requireSuperAdmin };
+module.exports = {
+    requireLogin,
+    requireAdmin,
+    requirePermission,
+    optionalAuth,
+    checkPermission,
+    checkAdmin,
+    getUserPermissions,
+    requireSuperAdmin,
+    getUserByCookie
+};

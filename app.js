@@ -6,6 +6,7 @@ const logger = require('./logger');
 const os = require('os');
 const { requireLogin, requireAdmin, checkAdmin, getUserByCookie, checkPermission } = require('./auth');
 const cheerio = require('cheerio');
+const appPort = require('./config').middleware.appPort;
 // const { SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD, DISK_ROOT } = require('./config');
 const { validateInt, validateString, validateEmail } = require('./validation');
 
@@ -670,7 +671,12 @@ app.use(async (err, req, res, next) => {
 
 // 404 处理
 app.use((req, res) => {
-    res.status(404).send('页面未找到');
+    res.status(404).send(JSON.stringify(
+        {
+            status: 'N',
+            "error": "Route not found"
+        }
+    ));
 });
 
 // ---------- 启动服务器 ----------
@@ -710,10 +716,9 @@ process.on('unhandledRejection', (reason, promise) => {
     logger.logError('Unhandled Rejection', reason).catch(e => console.error(e));
 });
 
-const PORT = 8640;
 ensureDirs().then(() => {
-    app.listen(PORT, () => {
-        console.log(`Server running on http://0.0.0.0:${PORT}`);
+    app.listen(appPort, () => {
+        console.log(`Server running on http://0.0.0.0:${appPort}`);
         startFinalizer();
     });
 });

@@ -488,32 +488,6 @@ class ConnectionPool {
 const pool = new ConnectionPool();
 
 /**
- * 登录
- */
-async function login(username, password) {
-	if (!username || !password) {
-		throw new Error('Missing credentials');
-	}
-	try {
-		const conn = pool.getAccount();
-		const data = packParams([username, password]);
-		const resp = await conn.send('L', data);
-		if (resp.command === 'Y') {
-			const parts = parsePack(resp.data);
-			if (parts.length > 0) return parts[0];
-			return null;
-		}
-		const errMsg = resp.data.toString('utf8') || 'Login failed';
-		throw new Error(errMsg);
-	} catch (err) {
-		logger.logError(`Login failed for ${username}: ${err.message}`, err);
-		throw err;
-	}
-}
-
-// ---------- Hack 相关（使用多信道连接池） ----------
-
-/**
  * 提交 Hack 评测（使用多信道连接池）
  */
 async function submitHack({ code, input, output, setv, tl, ml, token, cookie }) {

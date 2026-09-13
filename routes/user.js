@@ -2,6 +2,7 @@ const express = require('express');
 // const sentemail = require('./email.js');
 const router = express.Router();
 const { packParams, parsePack } = require('../db');
+const pool = require('../db');
 const { getUserByCookie, requireLogin, requireAdmin, getUserPermissions } = require('../auth');
 const logger = require('../logger');
 const crypto = require('crypto');
@@ -16,10 +17,6 @@ const execPromise = util.promisify(exec);
 const os = require('os');
 // const { DATA_ROOT, CHECKER_ROOT } = require('../config');
 const { validateInt, validateString, validateEmail, validateBoolean } = require('../validation');
-
-function generateCookie() {
-    return crypto.randomBytes(32).toString('hex');
-}
 
 // 获取当前用户的所有权限
 router.get('/mypermissions', requireLogin, async (req, res) => {
@@ -42,9 +39,22 @@ router.get('/login', async (req, res) => {
         return res.json({ status: 'N', error: `password: ${pwErr}` });
     }
     try {
-        const cookie = await pool.login(username, password);  // db.js 已实现 login
-        await logger.logSecurity(null, username, ip, 'login_success');
-        res.json({ status: 'Y', cookie });
+        if (!username || !password) {
+            throw new Error('Missing credentials');
+        }
+        const conn = pool.getAccount();
+        const data = packParams([username, password]);
+        const resp = await conn.send('L', data);
+        const parts = parsePack(resp.data);
+        if (resp.command === 'Y') {
+            const cookie = parts[0].toString('utf8');
+            await logger.logSecurity(null, username, ip, 'login_success');
+            res.json({ status: 'Y', cookie });
+            return;
+        }
+        const errMsg = parts[0].toString('utf8') || 'Login failed';
+        throw new Error(errMsg);
+       
     } catch (err) {
         await logger.logSecurity(null, username, ip, 'login_fail', null, err.message);
         res.json({ status: 'N', error: err.message });
@@ -59,7 +69,9 @@ router.get('/verifycookie', async (req, res) => {
     try {
         const user = await getUserByCookie(cookie);
         res.json({ status: user ? 'Y' : 'N' });
-    } catch {
+    } catch (err) {
+        console.log(err);
+        console.log("Failed");
         res.json({ status: 'N' });
     }
 });
@@ -79,23 +91,23 @@ router.get('/getinfoshort', async (req, res) => {
             return res.json({ status: 'N', error: 'User not found' });
         }
         const parts = parsePack(resp.data);
-        if (parts.length < 8) {
+        if (parts.length < 7) {
             return res.json({ status: 'N', error: 'Invalid response from middleware' });
         }
-        const uid = parseInt(parts[0]);
+        const uid = parseInt(parts[0].toString('utf8'));
         if (isNaN(uid)) {
             return res.json({ status: 'N', error: 'Invalid uid in response' });
         }
         // 处理字段：pubcode 为 "yes"/"no"，badge/name_color 可能为空字符串（转为 null 或保留）
-        const pubcode = parts[2] || '';
-        const slogan = parts[3] || '';
-        const role = parts[4] || 'user';
-        const badge = parts[5] || null;
-        const name_color = parts[6] || null;
+        const pubcode = parts[2].toString('utf8') || '';
+        const slogan = parts[3].toString('utf8') || '';
+        const role = parts[4].toString('utf8') || 'user';
+        const badge = parts[5].toString('utf8') || null;
+        const name_color = parts[6].toString('utf8') || null;
         res.json({
             status: 'Y',
             uid,
-            username: parts[1],
+            username: parts[1].toString('utf8'),
             pubcode,
             slogan,
             role,
@@ -117,8 +129,8 @@ router.post('/updinfoshort', requireLogin, upload.none(), async (req, res) => {
     const unErr = validateString(usrname, { minLen: 1, maxLen: 100 });
     if (unErr) return res.json({ status: 'N', error: `usrname: ${unErr}` });
     if (publiccode !== undefined && publiccode !== null) {
-        const pcErr = validateString(publiccode, { minLen: 0, maxLen: 10 });
-        if (pcErr) return res.json({ status: 'N', error: `publiccode: ${pcErr}` });
+        if (publiccode !== "yes" && publiccode !== "no")
+            return res.json({ status: 'N', error: "publiccode must be 'yes' or 'no'" });
     }
     if (slogan !== undefined && slogan !== null) {
         const slErr = validateString(slogan, { minLen: 0, maxLen: 200 });
@@ -130,9 +142,16 @@ router.post('/updinfoshort', requireLogin, upload.none(), async (req, res) => {
     /*
     DB Interface, waiting for implement
 
-    Input: usrname (string, required), paswd (string, optional), old_paswd (string, required if changing password),
-            publiccode (string, optional), slogan (string, optional), user (from auth)
-    Output: { status: 'Y' } | { status: 'N', error: string }
+    Input: 
+        usrname (string, required), 
+        paswd (string, optional), 
+        old_paswd (string, required if changing password),
+        publiccode (string, optional), 
+        slogan (string, optional), 
+        user (from auth)
+    Output: 
+        { status: 'Y' } | 
+        { status: 'N', error: string }
 
     Expected middleware behavior:
     - If paswd provided: verify old_paswd matches current password

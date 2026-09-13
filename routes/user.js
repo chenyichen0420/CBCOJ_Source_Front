@@ -76,7 +76,7 @@ router.get('/verifycookie', async (req, res) => {
     }
 });
 
-// ---------- 获取用户信息（支持 username / uid） ----------
+// ---------- 获取用户信息 ----------
 router.get('/getinfoshort', async (req, res) => {
     const key = req.query.key;
     const keyErr = validateString(key, { minLen: 1, maxLen: 200 });
@@ -84,7 +84,6 @@ router.get('/getinfoshort', async (req, res) => {
 
     try {
         const conn = pool.getAccount();
-        // 使用中间件 'U' 指令的 'any' 类型，自动识别 key 为 uid 或 username
         const data = packParams(['any', key, 'uid', 'username', 'pubcode', 'slogan', 'role', 'badge', 'name_color']);
         const resp = await conn.send('U', data);
         if (resp.command !== 'Y') {
@@ -125,40 +124,60 @@ router.post('/updinfoshort', requireLogin, upload.none(), async (req, res) => {
     const { usrname, paswd, old_paswd, publiccode, slogan } = req.body;
     const user = req.user;
     const ip = logger.getClientIp(req);
-    // 校验必填字段
     const unErr = validateString(usrname, { minLen: 1, maxLen: 100 });
     if (unErr) return res.json({ status: 'N', error: `usrname: ${unErr}` });
     if (publiccode !== undefined && publiccode !== null) {
-        if (publiccode !== "yes" && publiccode !== "no")
+        if (publiccode !== 'yes' && publiccode !== 'no')
             return res.json({ status: 'N', error: "publiccode must be 'yes' or 'no'" });
     }
     if (slogan !== undefined && slogan !== null) {
         const slErr = validateString(slogan, { minLen: 0, maxLen: 200 });
         if (slErr) return res.json({ status: 'N', error: `slogan: ${slErr}` });
     }
-    if (paswd && paswd.length > 100) {
-        return res.json({ status: 'N', error: '密码长度不能超过100位' });
+    if (paswd) {
+        if (paswd.length > 100)
+            return res.json({ status: 'N', error: 'Invalid password' });
+        if (!old_paswd)
+            return res.json({ status: 'N', error: 'Invalid password' });
     }
-    /*
-    DB Interface, waiting for implement
+    if (old_paswd && old_paswd.length > 100)
+        return res.json({ status: 'N', error: 'Invalid password' });
 
-    Input: 
-        usrname (string, required), 
-        paswd (string, optional), 
-        old_paswd (string, required if changing password),
-        publiccode (string, optional), 
-        slogan (string, optional), 
-        user (from auth)
-    Output: 
-        { status: 'Y' } | 
-        { status: 'N', error: string }
+    let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
+    if (req.headers.cookie && !cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+        if (match) {
+            cookie = decodeURIComponent(match[1]);
+        }
+    }
+    const usernameChanged = usrname !== user.username;
+    const args = [cookie];
+    if (usernameChanged) args.push('username', usrname);
+    if (publiccode !== undefined && publiccode !== null) args.push('pubcode', publiccode);
+    if (paswd) args.push('password', old_paswd, paswd);
+    if (slogan !== undefined && slogan !== null) args.push('slogan', slogan);
+    if (args.length === 1) return res.json({ status: 'Y' });
 
-    Expected middleware behavior:
-    - If paswd provided: verify old_paswd matches current password
-    - Update username, password (if provided), publiccode, slogan
-    - Return success or error
-    - On username change: frontend expects avatar files to be renamed (handled separately in this file)
-    */
+    console.log(args)
+
+    try {
+        const conn = pool.getAccount();
+        const data = packParams(args);
+        const resp = await conn.send('C', data);
+        const parts = parsePack(resp.data);
+
+        if (resp.command !== 'Y') {
+            const rawErr = parts.length > 0 ? parts[0].toString('utf8') : '';
+            await logger.logSecurity(user.id, user.username, ip, 'update_info_fail', null, `${rawErr}`);
+            return res.json({ status: 'N', error: rawErr });
+        }
+        await logger.logSecurity(user.id, user.username, ip, 'update_info_success');
+        const result = { status: 'Y' };
+        return res.json(result);
+    } catch (err) {
+        await logger.logSecurity(user.id, user.username, ip, 'update_info_fail', null, err.message);
+        return res.json({ status: 'N', error: err.message });
+    }
 });
 
 var reglasttime = {};

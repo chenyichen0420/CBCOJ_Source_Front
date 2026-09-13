@@ -47,6 +47,14 @@ app.use((req, res, next) => {
     next();
 });
 
+// ---------- 禁止 API 响应被缓存 ----------
+app.use('/api', (req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');       // HTTP/1.0 兼容
+    res.set('Expires', '0');              // 老代理
+    next();
+});
+
 // IP 封禁检查与自动封禁（内存计数 + 数据库持久化）
 const ipRequestWindow = 60 * 1000; // 1 分钟窗口
 const ipRequestCounts = new Map(); // ip -> [timestamps]

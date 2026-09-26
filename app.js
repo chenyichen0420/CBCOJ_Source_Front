@@ -4,7 +4,7 @@ const fs = require('fs');
 const pool = require('./db');
 const logger = require('./logger');
 const os = require('os');
-const { requireLogin, requireAdmin, checkAdmin, getUserByCookie, checkPermission } = require('./auth');
+const { requireLogin, requireAdmin, checkAdmin, getUserByCookie, checkPermission, requirePermission } = require('./auth');
 const cheerio = require('cheerio');
 const appPort = require('./config').middleware.appPort;
 // const { SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD, DISK_ROOT } = require('./config');
@@ -285,12 +285,13 @@ app.get('/problem/list', async (req, res) => {
 });
 
 // 新建题目编辑页面（放在 /problem/:pid 路由之前，避免被参数路由捕获）
-app.get('/problem/new', requireLogin, async (req, res) => {
+app.get('/problem/new', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
     const isAdmin = await checkAdmin(req);
     const nav = isAdmin ? navigationAdmin : navigation;
     res.render('problem-new', { title: '新建题目', navigation: nav, user: req.user, admin: isAdmin });
 });
 
+/*
 app.get('/problem/me', requireLogin, async (req, res) => {
     let page = parseInt(req.query.page) || 1;
     if (req.query.page !== undefined) {
@@ -302,7 +303,6 @@ app.get('/problem/me', requireLogin, async (req, res) => {
     const offset = (page - 1) * perPage;
     const isAdmin = await checkAdmin(req);
     const currentUser = req.user;
-    /*
     DB Interface, waiting for implement
 
     Input: username (string from currentUser), page (int, 1-based)
@@ -312,10 +312,12 @@ app.get('/problem/me', requireLogin, async (req, res) => {
     - Get paginated list of problems created by the current user
     - Filter by author username
     - Return total count and problems array
-    */
+    
     const nav = isAdmin ? navigationAdmin : navigation;
     res.render('problemlist', { problems, page, totalPages, navigation: nav, user: req.user });
 });
+*/
+//design philosophy indifferent: not going to store author of a problem
 
 // 题目详情
 app.get('/problem/:pid', async (req, res) => {
@@ -341,7 +343,7 @@ app.get('/problem/:pid', async (req, res) => {
 
 
 // 编辑题目界面（作者或有权限的用户）
-app.get('/problem/edit/:pid', requireLogin, async (req, res) => {
+app.get('/problem/edit/:pid', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
     const pid = req.params.pid;
     const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
     if (pidErr) return res.status(400).send(`pid: ${pidErr}`);

@@ -154,8 +154,6 @@ router.post('/updinfoshort', requireLogin, upload.none(), async (req, res) => {
     if (slogan !== undefined && slogan !== null) args.push('slogan', slogan);
     if (args.length === 1) return res.json({ status: 'Y' });
 
-    console.log(args)
-
     try {
         const conn = pool.getAccount();
         const data = packParams(args);
@@ -325,13 +323,13 @@ function generateBlueBackgroundCharSVG(char, options = {}) {
 // 返回头像（如果有则直接返回静态文件，否则返回动态 SVG）
 router.get('/avatar/:username', async (req, res) => {
     // 返回动态 SVG
+    const username = req.params.username;
     const initial = (username && username[0]) ? username[0].toUpperCase() : '?';
     const svg = generateBlueBackgroundCharSVG(initial, { width: 80, height: 80 });
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(svg);
     return;
     //暂时不支持自定义头像
-    const username = req.params.username;
     const unErr = validateString(username, { minLen: 1, maxLen: 100 });
     if (unErr) return res.status(400).json({ status: 'N', error: `username: ${unErr}` });
     const avatarDir = path.join(__dirname, '..', 'webpage', 'assets', 'avatars');

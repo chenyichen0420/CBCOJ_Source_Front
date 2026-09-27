@@ -26,15 +26,14 @@
         <div class="container">
             <h1>题库</h1>
             <div style="margin-bottom:12px; text-align:right;">
-                <% if (user) { %>
-                    <a href="/problem/me" class="btn" style="background:var(--primary);color:#fff;padding:6px 10px;border-radius:6px;">我的题目</a>
+                <% if (problemmng) { %>
                     <a href="/problem/new" class="btn" style="background:var(--primary);color:#fff;padding:6px 10px;border-radius:6px;">创建题目</a>
                 <% } %>
             </div>
             <div id="problemlist">
                 <% problems.forEach(problem => { %>
                     <div class="problem">
-                        <a href="/problem/<%= problem.pid %>"><%= problem.title %></a>
+                        <a href="/problem/<%= problem.id %>"><%= problem.title %></a>
                     </div>
                 <% }) %>
             </div>

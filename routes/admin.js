@@ -80,7 +80,7 @@ async function readProblem(pid, fields = ['id', 'pid', 'title', 'timelimit', 'me
 }
 
 async function listProblems(offset, limit) {
-    const response = await pool.getJudge().send('L', pool.packParams(['0', '16777215', '1']));
+    const response = await pool.getJudge().send('L', pool.packParams([String(offset), String(perPage), '1']));
     if (response.command !== 'Y') throw new Error('Problem list request failed');
     const parts = pool.parsePack(response.data).map(part => part.toString('utf8'));
     const returnedCount = Number(parts.shift());
@@ -88,23 +88,23 @@ async function listProblems(offset, limit) {
         throw new Error('Invalid problem count');
     }
     const total = parts.length;
-    const pageIds = parts.slice(offset, offset + limit);
-    const problems = await Promise.all(pageIds.map(id => readProblem(id, ['id', 'pid', 'title', 'timelimit', 'memorylimit', 'time', 'author', 'open'])));
+    const problems = await Promise.all(parts.map(id => readProblem(id, ['id', 'pid', 'title', 'timelimit', 'memorylimit', 'time', 'author', 'open'])));
     return { total, problems: problems.filter(Boolean) };
 }
 
 async function updateProblem(req, pid) {
     const problem = await readProblem(pid);
-    if (!problem) return { error: '题目不存在', status: 404 };
+    // if (!problem) return { error: '题目不存在', status: 404 };
 
     const body = req.body || {};
     const statement = { ...problem._statement };
     for (const field of ['background', 'description', 'inputfmt', 'outputfmt', 'hint']) {
         if (body[field] !== undefined) statement[field] = String(body[field]);
     }
-    if (body.sample !== undefined) {
-        if (!Array.isArray(body.sample)) return { error: 'sample 必须是数组', status: 400 };
-        statement.sample = body.sample;
+    const parsedsample = JSON.parse(body.sample);
+    if (parsedsample !== undefined) {
+        if (!Array.isArray(parsedsample)) return { error: 'sample 必须是数组', status: 400 };
+        statement.sample = parsedsample;
     }
 
     const pairs = [];
@@ -126,7 +126,7 @@ async function updateProblem(req, pid) {
     return { ok: true };
 }
 
-router.get('/admin/problems', requirePermission('can_manage_problems'), async (req, res) => {
+router.get('/problems', requirePermission('can_manage_problems'), async (req, res) => {
     let page = Number(req.query.page || 1);
     let limit = Number(req.query.limit || 20);
     const pageErr = validateInt(page, { positive: true });
@@ -134,14 +134,14 @@ router.get('/admin/problems', requirePermission('can_manage_problems'), async (r
     if (pageErr) return res.status(400).json({ status: 'N', error: `page: ${pageErr}` });
     if (limitErr) return res.status(400).json({ status: 'N', error: `limit: ${limitErr}` });
     try {
-        const result = await listProblems((page - 1) * limit, limit);
+        const result = await listProblems((page - 1) * limit + 1, limit);
         res.json({ status: 'Y', ...result, page, totalPages: Math.ceil(result.total / limit) });
     } catch (err) {
         res.status(502).json({ status: 'N', error: '题目列表获取失败' });
     }
 });
 
-router.get('/admin/problems/all', requirePermission('can_manage_problems'), async (req, res) => {
+router.get('/problems/all', requirePermission('can_manage_problems'), async (req, res) => {
     try {
         const result = await listProblems(0, 0xFFFFFF);
         res.json({ status: 'Y', problems: result.problems.map(({ id, pid, title }) => ({ id, pid, title })) });
@@ -150,7 +150,7 @@ router.get('/admin/problems/all', requirePermission('can_manage_problems'), asyn
     }
 });
 
-router.get('/admin/problem/:id', requirePermission('can_manage_problems'), async (req, res) => {
+router.get('/problem/:id', requirePermission('can_manage_problems'), async (req, res) => {
     const idErr = validateString(req.params.id, { minLen: 1, maxLen: 50 });
     if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
     try {
@@ -163,7 +163,7 @@ router.get('/admin/problem/:id', requirePermission('can_manage_problems'), async
     }
 });
 
-router.put('/admin/problem/:id', requirePermission('can_manage_problems'), async (req, res) => {
+router.put('/problem/edit/:id', requirePermission('can_manage_problems'), async (req, res) => {
     try {
         const result = await updateProblem(req, req.params.id);
         if (!result.ok) return res.status(result.status).json({ status: 'N', error: result.error });

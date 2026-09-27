@@ -349,11 +349,12 @@ app.get('/problem/list', async (req, res) => {
         page = Number(req.query.page);
     }
     const perPage = 10;
-    const offset = (page - 1) * perPage;
+    const offset = (page - 1) * perPage + 1;
     const isAdmin = await checkAdmin(req);
+    const canmngproblem = await checkPermission(req.user.id, 'can_manage_problems');
     try {
         const conn = pool.getJudge();
-        const resp = await conn.send('L', pool.packParams([String(offset), String(perPage), isAdmin ? '1' : '0']));
+        const resp = await conn.send('L', pool.packParams([String(offset), String(perPage), canmngproblem ? '1' : '0']));
         if (resp.command !== 'Y') return res.status(502).send('题目列表获取失败');
         const parts = pool.parsePack(resp.data).map(part => part.toString('utf8'));
         const returnedCount = Number(parts.shift());
@@ -362,11 +363,11 @@ app.get('/problem/list', async (req, res) => {
         }
         const problems = await Promise.all(parts.map(async id => {
             const problem = await getProblemFromMiddleware(id, ['title']);
-            return { pid: `C${id}`, title: problem ? problem.title : '' };
+            return { id: `${id}`, pid: `C${id}`, title: problem ? problem.title : '' };
         }));
         const totalPages = page + 1;
         const nav = isAdmin ? navigationAdmin : navigation;
-        res.render('problemlist', { problems, page, totalPages, navigation: nav, user: req.user });
+        res.render('problemlist', { problems, page, totalPages, navigation: nav, user: req.user, problemmng: canmngproblem });
     } catch (err) {
         logger.logError(`Problem list failed: ${err.message}`, err);
         res.status(502).send('题目列表获取失败');

@@ -1,14 +1,10 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const pool = require('./db');
 const logger = require('./logger');
-const os = require('os');
-const { requireLogin, requireAdmin, checkAdmin, getUserByCookie, checkPermission, requirePermission } = require('./auth');
-const cheerio = require('cheerio');
+const { requireLogin, checkAdmin, getUserByCookie, checkPermission, requirePermission } = require('./auth');
 const appPort = require('./config').middleware.appPort;
-// const { SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD, DISK_ROOT } = require('./config');
-const { validateInt, validateString, validateEmail } = require('./validation');
+const { validateInt, validateString } = require('./validation');
 
 const app = express();
 
@@ -183,56 +179,26 @@ app.use(async (req, res, next) => {
 });
 
 // ---------- 辅助函数 ----------
-const navigation = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/disk">网盘</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a>`;
-const navigationAdmin = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/disk">网盘</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a><a href="/admin">管理后台</a>`;
-
-// 服务器端简单消毒函数：使用 cheerio 移除危险元素与属性
-function sanitizeHtmlServer(html) {
-    if (!html) return '';
-    try {
-        const $ = cheerio.load(html, { decodeEntities: true });
-        // 移除危险的元素
-        $('script, iframe, object, embed, form').remove();
-        // 移除事件处理器(on*)和可疑的 href/src 属性
-        $('*').each((i, el) => {
-            const attribs = el.attribs || {};
-            for (const attr in attribs) {
-                if (/^on/i.test(attr)) $(el).removeAttr(attr);
-                else {
-                    const val = attribs[attr] + '';
-                    if (/^javascript:/i.test(val) || /^data:/i.test(val)) {
-                        $(el).removeAttr(attr);
-                    }
-                }
-            }
-        });
-        // 返回 body 内部的 HTML（如果有 body），否则返回整段 HTML
-        const body = $('body');
-        return body.length ? body.html() : $.root().html();
-    } catch (e) {
-        console.error('sanitizeHtmlServer error', e);
-        return '';
-    }
-}
+const navigation = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a>`;
+const navigationAdmin = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a><a href="/admin">管理后台</a>`;
 
 async function getStatistics() {
-    return [0, 0, 0, 0];
-    //temporaly disabled
     try {
-        /*
-        DB Interface, waiting for implement
+        const conn = pool.getAccount();
+        const resp = await conn.send('S', pool.packParams([]));
+        if (resp.command !== 'Y') throw new Error('Statistics query failed');
 
-        Input: void
-        Output: [ problemCount, userCount, submissionCount, contestCount ]
+        // AccountSession's S response order is rid, pid, cid, uid, hid.
+        const values = pool.parsePack(resp.data).map(part => part.toString('utf8'));
 
-        Expected middleware behavior:
-        - Get total counts from middleware
-        - Return as array of strings with '+' suffix
-        - Should be cached for performance (homepage stats)
-        */
-        return [probCount[0].total + '+', userCount[0].total + '+', subCount[0].total + '+', contestCount[0].total + '+'];
+        if (values.length !== 5 || values.some(value => !/^\\d+$/.test(value))) {
+            throw new Error('Invalid statistics response');
+        }
+
+        // Homepage order: problems (pid), users (uid), submissions (rid), contests (cid).
+        return [values[1], values[3], values[0], values[2]].map(value => `${value}+`);
     } catch (err) {
-        console.error('Error during getting homepage statistics: ', err);
+        logger.logError('Error during getting homepage statistics', err);
         return [0, 0, 0, 0];
     }
 }
@@ -685,26 +651,6 @@ app.get('/settings', requireLogin, async (req, res) => {
     res.render('settings', { navigation: nav, user: req.user });
 });
 
-// 网盘
-app.get('/disk', requireLogin, async (req, res) => {
-    /*
-    MODULE: Disk
-    Status: INDEPENDENT (kept in local database + file system)
-
-    Input: user (from auth)
-    Output: { files, quota, used }
-
-    Expected behavior:
-    - Get file list from local disk_files table (by user_id)
-    - Get quota from local users table (disk_quota)
-    - Calculate used space (SUM file_size)
-    - This module is NOT part of the middleware
-    */
-    const isAdmin = await checkAdmin(req);
-    const nav = isAdmin ? navigationAdmin : navigation;
-    res.render('disk', { files, quota, used, navigation: nav, user: req.user });
-});
-
 // 登录页面
 app.get('/login', async (req, res) => {
     const isAdmin = await checkAdmin(req);
@@ -734,7 +680,6 @@ app.use('/api', require('./routes/admin'));
 // app.use('/api', require('./routes/community'));
 // app.use('/api/contests', require('./routes/contest'));
 // app.use('/api/profile', require('./routes/profile'));
-// app.use('/api/disk', require('./routes/disk'));
 
 // ---------- 静态资源（CSS, JS, 图片等） ----------
 app.use('/assets', express.static(path.join(__dirname, 'webpage/assets')));
@@ -834,7 +779,6 @@ ensureDirs().then(() => {
 | `/discussions` | 独立保留 | 讨论区列表 |
 | `/discussion-detail/:cid` | 独立保留 | 讨论详情 |
 | `/chat` | 独立保留 | 私信页面 |
-| `/disk` | 独立保留 | 网盘页面 |
 | `/profile/:username` | 混合 | 用户信息从中间件获取，Markdown 本地存储 |
 | `/profile-edit` | 独立保留 | 个人主页编辑 |
 
@@ -868,7 +812,6 @@ ensureDirs().then(() => {
 | `/profile-edit` | `profile-edit.ejs` | 无数据依赖 |
 | `/chat` | `chat.ejs` | 本地数据库 |
 | `/settings` | `settings.ejs` | 无数据依赖（用户信息由前端获取） |
-| `/disk` | `disk.ejs` | 本地数据库 |
 | `/login` | `login.ejs` | 无数据依赖 |
 | `/register` | `register.ejs` | 无数据依赖 |
 | `/admin` | `admin.ejs` | 无数据依赖 |

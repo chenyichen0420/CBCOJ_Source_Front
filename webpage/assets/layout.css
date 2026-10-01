@@ -120,7 +120,7 @@ nav {
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
   padding: 12px;
-  margin-top: 8px;
+  margin-top: 2px;
   box-shadow: var(--shadow-md);
   backdrop-filter: blur(8px);
   min-width: 120px;

@@ -191,7 +191,7 @@ async function getStatistics() {
         // AccountSession's S response order is rid, pid, cid, uid, hid.
         const values = pool.parsePack(resp.data).map(part => part.toString('utf8'));
 
-        if (values.length !== 5 || values.some(value => !/^\\d+$/.test(value))) {
+        if (values.length !== 5 || values.some(value => !/^\d+$/.test(value))) {
             throw new Error('Invalid statistics response');
         }
 

@@ -303,7 +303,7 @@ class Connection {
 class HackConnection extends Connection {
 	constructor(port, host, name) {
 		super(port, host, name);
-		this.channelAllocSeq = 255;
+		this.channelAllocSeq = 0; // control channel id reserved as 0 on server
 		this.activeChannels = new Set();
 		this.channelResolvers = new Map();
 		this.pendingSubmit = [];
@@ -326,11 +326,11 @@ class HackConnection extends Connection {
 			const seq = packet[1];
 			const data = packet.slice(5, totalLen);
 
-			if (seq === 255) {
-				const entry = this.pending.get(255);
+			if (seq === 0) {
+				const entry = this.pending.get(0);
 				if (entry) {
 					clearTimeout(entry.timer);
-					this.pending.delete(255);
+					this.pending.delete(0);
 					entry.resolve({ command, data });
 				}
 			} else {
@@ -349,7 +349,7 @@ class HackConnection extends Connection {
 	}
 
 	async allocateChannel() {
-		const seq = 255;
+		const seq = 0; // send to control channel (id 0) to request allocation
 		const packet = buildPacket('H', seq, Buffer.alloc(0));
 
 		return new Promise((resolve, reject) => {
@@ -383,6 +383,30 @@ class HackConnection extends Connection {
 			}
 			const errMsg = resp.data.toString('utf8') || 'No error message';
 			throw new Error(`Channel allocation failed: ${errMsg}`);
+		});
+	}
+
+	async sendControl(command, data) {
+		// send a control command to control channel id 0 and wait for response
+		const seq = 0;
+		const packet = buildPacket(command, seq, data);
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				if (this.pending.has(seq)) {
+					this.pending.delete(seq);
+					reject(new Error(`Control command timeout`));
+				}
+			}, CONFIG.REQUEST_TIMEOUT);
+
+			this.pending.set(seq, { resolve, reject, timer });
+
+			this.socket.write(packet, (err) => {
+				if (err) {
+					clearTimeout(timer);
+					this.pending.delete(seq);
+					reject(err);
+				}
+			});
 		});
 	}
 
@@ -420,6 +444,11 @@ class HackConnection extends Connection {
 		return this.activeChannels.size;
 	}
 
+	// helper to indicate availability (for health checks)
+	isAvailable() {
+		return this.connected && this.socket && !this.socket.destroyed;
+	}
+
 	async close() {
 		if (this.activeChannels.size > 0) {
 			logger.logRuntime('INFO', `[${this.name}] Waiting for ${this.activeChannels.size} active channels to complete...`);
@@ -448,6 +477,16 @@ class ConnectionPool {
 			'Hack'
 		);
 		this._initialized = false;
+		// health check cache
+		this._lastHealthCheckTime = 0; // ms
+		this._lastHealthResult = {
+			account: this.accountConn.isAvailable(),
+			judge: this.judgeConn.isAvailable(),
+			hack: this.hackConn.isAvailable(),
+			hackChannels: this.hackConn.getActiveChannelCount(),
+			overall: 'red',
+			lastChecked: 0
+		};
 	}
 
 	async init() {
@@ -466,13 +505,74 @@ class ConnectionPool {
 	getJudge() { return this.judgeConn; }
 	getHack() { return this.hackConn; }
 
-	healthCheck() {
-		return {
-			account: this.accountConn.isAvailable(),
-			judge: this.judgeConn.isAvailable(),
-			hack: this.hackConn.isAvailable(),
+	async healthCheck() {
+		const now = Date.now();
+		// cache for at least 60s
+		if (now - this._lastHealthCheckTime < 60 * 1000) {
+			return this._lastHealthResult;
+		}
+
+		// perform passive health checks: send 'O' (health) to each connection if connected
+		const results = {
+			account: false,
+			judge: false,
+			hack: false,
 			hackChannels: this.hackConn.getActiveChannelCount(),
+			overall: 'red',
+			lastChecked: now
 		};
+
+		try {
+			// account
+			try {
+				if (!this.accountConn.isAvailable()) {
+					await this.accountConn.connect();
+				}
+				const resp = await this.accountConn.send('O', Buffer.alloc(0));
+				results.account = resp && resp.command === 'Y';
+			} catch (e) {
+				results.account = false;
+			}
+
+			// judge
+			try {
+				if (!this.judgeConn.isAvailable()) {
+					await this.judgeConn.connect();
+				}
+				const resp2 = await this.judgeConn.send('O', Buffer.alloc(0));
+				results.judge = resp2 && resp2.command === 'Y';
+			} catch (e) {
+				results.judge = false;
+			}
+
+			// hack
+			try {
+				if (!this.hackConn.isAvailable()) {
+					await this.hackConn.connect();
+				}
+				const resp3 = await this.hackConn.sendControl('O', Buffer.alloc(0));
+				results.hack = resp3 && resp3.command === 'Y';
+			} catch (e) {
+				logger.logError(`[Hack] health check failed: ${e && e.message ? e.message : e}` , e);
+				results.hack = false;
+			}
+
+			// determine overall
+			if (results.account && results.judge && results.hack) results.overall = 'green';
+			else if (!results.account && !results.judge && !results.hack) results.overall = 'red';
+			else results.overall = 'yellow';
+
+			this._lastHealthCheckTime = now;
+			this._lastHealthResult = results;
+
+			logger.logRuntime('INFO', `connectivity check ${now}: ${JSON.stringify(results)}`);
+
+			return results;
+		} catch (err) {
+			this._lastHealthCheckTime = now;
+			this._lastHealthResult = results;
+			return results;
+		}
 	}
 
 	close() {
@@ -623,24 +723,6 @@ async function queryResult(hid) {
 	} catch (err) {
 		logger.logError(`Query result failed for hid ${hid}: ${err.message}`, err);
 		throw err;
-	}
-}
-
-/**
- * 获取统计信息
- */
-async function getStatistics() {
-	try {
-		logger.logRuntime('WARN', 'getStatistics: statistics API not implemented, returning default values');
-		return {
-			problems: 0,
-			users: 0,
-			submissions: 0,
-			contests: 0,
-		};
-	} catch (err) {
-		logger.logError(`Get statistics failed: ${err.message}`, err);
-		return { problems: 0, users: 0, submissions: 0, contests: 0 };
 	}
 }
 

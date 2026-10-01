@@ -312,7 +312,17 @@ app.get('/', async (req, res) => {
     const stats = await getStatistics();
     const isAdmin = await checkAdmin(req);
     const nav = isAdmin ? navigationAdmin : navigation;
-    res.render('index', { stats, navigation: nav, user: req.user });
+
+    // service health (cached at least 60s inside db.js)
+    let health = null;
+    try {
+        health = await pool.healthCheck();
+    } catch (e) {
+        health = { overall: 'red', account: false, judge: false, hack: false, hackChannels: 0, lastChecked: Date.now() };
+    }
+    const healthText = health && health.lastChecked ? new Date(health.lastChecked).toLocaleString() : '未知';
+
+    res.render('index', { stats, navigation: nav, user: req.user, health, healthText });
 });
 
 // 题库列表
@@ -332,17 +342,27 @@ app.get('/problem/list', async (req, res) => {
         const resp = await conn.send('L', pool.packParams([String(offset), String(perPage), canmngproblem ? '1' : '0']));
         if (resp.command !== 'Y') return res.status(502).send('题目列表获取失败');
         const parts = pool.parsePack(resp.data).map(part => part.toString('utf8'));
-        const returnedCount = Number(parts.shift());
-        if (!Number.isInteger(returnedCount) || returnedCount < 0 || returnedCount !== parts.length) {
-            throw new Error('Invalid problem count');
-        }
-        const problems = await Promise.all(parts.map(async id => {
+        // protocol: first element is total count, following elements are the returned ids for this page
+        const total = Number(parts.shift());
+        if (!Number.isInteger(total) || total < 0) throw new Error('Invalid total count');
+        const ids = parts;
+        const problems = await Promise.all(ids.map(async id => {
             const problem = await getProblemFromMiddleware(id, ['title']);
-            return { id: `${id}`, pid: `C${id}`, title: problem ? problem.title : '' };
+            return { id: `${id}`, title: problem ? problem.title : '' };
         }));
-        const totalPages = page + 1;
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+        // pagination links: first, current-5..current+5, last (unique, sorted)
+        const pagesSet = new Set();
+        pagesSet.add(1);
+        const start = Math.max(1, page - 5);
+        const end = Math.min(totalPages, page + 5);
+        for (let i = start; i <= end; i++) pagesSet.add(i);
+        pagesSet.add(totalPages);
+        const pageLinks = Array.from(pagesSet).sort((a,b)=>a-b);
+
         const nav = isAdmin ? navigationAdmin : navigation;
-        res.render('problemlist', { problems, page, totalPages, navigation: nav, user: req.user, problemmng: canmngproblem });
+        res.render('problemlist', { problems, page, totalPages, pageLinks, navigation: nav, user: req.user, problemmng: canmngproblem });
     } catch (err) {
         logger.logError(`Problem list failed: ${err.message}`, err);
         res.status(502).send('题目列表获取失败');
@@ -355,34 +375,6 @@ app.get('/problem/new', requireLogin, requirePermission('can_manage_problems'), 
     const nav = isAdmin ? navigationAdmin : navigation;
     res.render('problem-new', { title: '新建题目', navigation: nav, user: req.user, admin: isAdmin });
 });
-
-/*
-app.get('/problem/me', requireLogin, async (req, res) => {
-    let page = parseInt(req.query.page) || 1;
-    if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
-        if (err) return res.status(400).json({ status: 'N', error: `page: ${err}` });
-        page = Number(req.query.page);
-    }
-    const perPage = 10;
-    const offset = (page - 1) * perPage;
-    const isAdmin = await checkAdmin(req);
-    const currentUser = req.user;
-    DB Interface, waiting for implement
-
-    Input: username (string from currentUser), page (int, 1-based)
-    Output: { total, totalPages, problems: [{ pid, title }, ...] }
-
-    Expected middleware behavior:
-    - Get paginated list of problems created by the current user
-    - Filter by author username
-    - Return total count and problems array
-    
-    const nav = isAdmin ? navigationAdmin : navigation;
-    res.render('problemlist', { problems, page, totalPages, navigation: nav, user: req.user });
-});
-*/
-//design philosophy indifferent: not going to store author of a problem
 
 // 题目详情
 app.get('/problem/:pid', async (req, res) => {

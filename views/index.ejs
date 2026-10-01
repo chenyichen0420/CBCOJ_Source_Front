@@ -74,6 +74,17 @@
                     </div>
 
                     <div class="right card">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                服务状态：
+                                <div id="healthDesc">未知</div>
+                                <div id="healthIndicator" style="width:12px;height:12px;border-radius:50%;background:#ccc;box-shadow:0 0 0 2px rgba(0,0,0,0.03);"></div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <div style="font-size:12px;color:#666;">上次检测：<span id="healthText"><%= healthText %></span></div>
+                            </div>
+                        </div>
+
                         <div class="recent-activity">
                             <h4>📝 最近动态</h4>
                             <ul>
@@ -108,6 +119,7 @@
                                 <small>网页如有问题请联系：<a href="mailto:18908232278@163.com">18908232278@163.com</a></small><br>
                                 <small>后端如有问题请联系：<a href="mailto:18190772965@163.com">18190772965@163.com</a></small><br>
                             </p>
+
                         </div>
                     </div>
                 </div>
@@ -117,5 +129,35 @@
 
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
     <script type="text/javascript" src="/assets/index.min.js"></script>
+    <script>
+        (function(){
+                try {
+                const health = <%- JSON.stringify(health || { overall: 'red', lastChecked: Date.now() }) %>;
+                const el = document.getElementById('healthIndicator');
+                const desc = document.getElementById('healthDesc');
+                if (el) {
+                    if (health.overall === 'green') {
+                        el.style.background = 'green';
+                        if (desc) { desc.textContent = '正常'; }
+                    }
+                    else if (health.overall === 'yellow') {
+                        el.style.background = 'gold';
+                        if (desc) { desc.textContent = '降级'; }
+                    }
+                    else {
+                        el.style.background = 'red';
+                        if (desc) { desc.textContent = '异常'; }
+                    }
+                }
+                const ht = document.getElementById('healthText');
+                if (ht && health.lastChecked) {
+                    const d = new Date(health.lastChecked);
+                    ht.textContent = d.toLocaleString();
+                }
+            } catch (e) {
+                // ignore
+            }
+        })();
+    </script>
 </body>
 </html>

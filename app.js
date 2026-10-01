@@ -37,6 +37,15 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+    res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+    });
+    next();
+});
 
 app.use((req, res, next) => {
     req.injections = req.injections || {};
@@ -682,14 +691,29 @@ app.use('/api', require('./routes/admin'));
 // app.use('/api/profile', require('./routes/profile'));
 
 // ---------- 静态资源（CSS, JS, 图片等） ----------
-app.use('/assets', express.static(path.join(__dirname, 'webpage/assets')));
-app.use('/admin/assets', express.static(path.join(__dirname, 'webpage/admin/assets')));
-app.use('/favicon.ico', express.static(path.join(__dirname, 'webpage/favicon.ico')));
+app.use('/assets', express.static(path.join(__dirname, 'webpage/assets'), {
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
+}));
+app.use('/admin/assets', express.static(path.join(__dirname, 'webpage/admin/assets'), {
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
+}));
+app.use('/favicon.ico', express.static(path.join(__dirname, 'webpage/favicon.ico'), {
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
+}));
 
 // 对于其他未匹配的静态文件（如 robots.txt），仍然允许通过原有静态中间件，但不提供 .html 文件
 app.use(express.static(path.join(__dirname, 'webpage'), {
     index: false,
-    extensions: ['txt', 'xml', 'ico', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']
+    extensions: ['txt', 'xml', 'ico', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'],
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
 }));
 
 // 全局错误处理中间件（必须在所有路由之后）
@@ -720,26 +744,6 @@ async function ensureDirs() {
     // }
 }
 
-/*
-Function: updateContestSubmission
-Status: TO BE REMOVED (replaced by middleware)
-
-This function is no longer needed. Contest submission updates are now handled by the middleware.
-*/
-async function updateContestSubmission(conn, submissionId) {
-    // ... entire function body to be removed ...
-}
-
-/*
-Function: startFinalizer
-Status: TO BE REMOVED (replaced by middleware)
-
-This function is no longer needed. Result aggregation is now handled by the middleware's recmng.
-*/
-function startFinalizer() {
-    // ... entire function body to be removed ...
-}
-
 setInterval(async () => {
     await logger.logRuntime('STATS', 'Server periodic health check');
 }, 10 * 60 * 1000);
@@ -752,7 +756,6 @@ process.on('unhandledRejection', (reason, promise) => {
 ensureDirs().then(() => {
     app.listen(appPort, () => {
         console.log(`Server running on http://0.0.0.0:${appPort}`);
-        startFinalizer();
     });
 });
 

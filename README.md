@@ -1,7 +1,8 @@
 ## Intro
 
-this is a branch where CBC do ~~her~~ works.
+This is CBCOJ's Frontend/Webpage repo.
 
-CBCOJ Inherits LZJOJ's UI, but with a totally different backend service system.
+More specifically, CBCOJ's Frontend and Webpage is in fact modified from LZJOJ, but accompanied with a totally different backend service system.
 
-See more on CBCOJ_Releases or CBCOJ_Source.
+See user docs at CBCOJ_Docs, and some technical information at CBCOJ_Devs, and refer to CBCOJ_Releases if you want to deploy one locally.
+

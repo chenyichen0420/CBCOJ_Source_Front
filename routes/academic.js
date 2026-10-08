@@ -2,26 +2,23 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireLogin, requireAdmin, requirePermission, checkPermission } = require('../auth');
-const fs = require('fs').promises;
-const path = require('path');
-const util = require('util');
 const multer = require('multer');
 const upload = multer();
 const { validateInt, validateString } = require('../validation');
 
 router.get('/getproblem', requireLogin, async (req, res) => {
-    const pid = req.query.pid;
-    const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
-    if (pidErr) return res.status(400).json({ status: 'N', error: `pid: ${pidErr}` });
+    const id = req.query.id;
+    const idErr = validateString(id, { minLen: 1, maxLen: 50 });
+    if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
     /*
     DB Interface, waiting for implement
 
-    Input: pid (string)
-    Output: { status: 'Y', pid, title, background, description, inputfmt, outputfmt,
+    Input: id (string)
+    Output: { status: 'Y', id, title, background, description, inputfmt, outputfmt,
               hint, timelm, memlm, datacount, sample (JSON array), checker_path }
 
     Expected middleware behavior:
-    - Query problem metadata by pid
+    - Query problem metadata by id
     - Return all problem fields
     - sample should be parsed as JSON array
     - Return 404 if problem not found
@@ -41,20 +38,20 @@ router.post('/getproblemlist', requireLogin, express.json(), async (req, res) =>
     DB Interface, waiting for implement
 
     Input: page (int, 1-based)
-    Output: { status: 'Y', data: [{ pid, title }, ...], page: totalPages }
+    Output: { status: 'Y', data: [{ id, title }, ...], page: totalPages }
 
     Expected middleware behavior:
     - Get paginated list of problems
-    - Return only pid and title fields
+    - Return only id and title fields
     - Return total page count
     */
 });
 
 router.post('/submit', requireLogin, upload.none(), requirePermission('can_submit_code'), async (req, res) => {
-    const { pid, code, language } = req.body;
+    const { id, code, language } = req.body;
     const user = req.user;
-    const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
-    if (pidErr) return res.json({ status: 'N', error: `pid: ${pidErr}` });
+    const idErr = validateString(id, { minLen: 1, maxLen: 50 });
+    if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });
     const codeErr = validateString(code, { minLen: 1 });
     if (codeErr) return res.json({ status: 'N', error: `code: ${codeErr}` });
     const langErr = validateString(language, { minLen: 1, maxLen: 20 });
@@ -63,7 +60,7 @@ router.post('/submit', requireLogin, upload.none(), requirePermission('can_submi
     /*
     DB Interface, waiting for implement
 
-    Input: pid (string), code (string, base64 encoded), language (string), user (from auth)
+    Input: id (string), code (string, base64 encoded), language (string), user (from auth)
     Output: { status: 'Y', rid: string } | { status: 'N', error: string }
 
     Expected middleware behavior:
@@ -92,12 +89,12 @@ router.get('/recordlist', requireLogin, async (req, res) => {
     /*
     DB Interface, waiting for implement
 
-    Input: target (string, optional, pid or 'all'), page (int, optional, 1-based), user (from auth)
+    Input: target (string, optional, problem id or 'all'), page (int, optional, 1-based), user (from auth)
     Output: { status: 'Y', recordlist: JSON.stringify([rid, ...]), page: totalPages }
 
     Expected middleware behavior:
     - Get list of submission ids for the current user
-    - If target is a pid, filter submissions for that problem
+    - If target is a problem id, filter submissions for that problem
     - Return JSON string of rid array
     - Return total page count
     */
@@ -146,70 +143,28 @@ router.post('/problem/new', requirePermission('can_manage_problems'), upload.non
     Input: title (string), background (string), description (string), inputfmt (string),
             outputfmt (string), hint (string), timelm (int), memlm (int),
             datacount (int), sample (JSON array), selected (int 0/1), user (from auth)
-    Output: { status: 'Y', pid: string } | { status: 'N', error: string }
+    Output: { status: 'Y', id: string } | { status: 'N', error: string }
 
     Expected middleware behavior:
-    - Auto-generate next available numeric pid
+    - Auto-generate next available numeric id
     - Create new problem with provided fields
     - Set author to current user's username
     - Set opened=0 (not public by default)
     - Set selected=0 (not featured by default)
-    - Return the assigned pid
-    */
-});
-
-// 用户上传数据包（仅题目作者或有权限的用户）
-const uploadZipUser = multer({
-    storage: multer.diskStorage({
-        destination: (req, file, cb) => {
-            const tempDir = '/tmp/oj_upload_temp';
-            fs.mkdirSync(tempDir, { recursive: true });
-            cb(null, tempDir);
-        },
-        filename: (req, file, cb) => {
-            const unique = `${req.params.id}-${Date.now()}.zip`;
-            cb(null, unique);
-        }
-    }),
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
-            cb(null, true);
-        } else {
-            cb(new Error('只允许上传 ZIP 文件'));
-        }
-    }
-});
-
-router.post('/problem/:id/upload-data', requirePermission('can_manage_problems'), uploadZipUser.single('file'), async (req, res) => {
-    const problemId = req.params.id;
-    const idErr = validateInt(problemId, { positive: true });
-    if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
-    const file = req.file;
-    if (!file) return res.status(400).json({ status: 'N', error: '未选择文件' });
-    /*
-    DB Interface, waiting for implement
-
-    Input: problemId (int), file (multipart zip), user (from auth)
-    Output: { status: 'Y', message: string, data_path: string } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Verify user has permission (author or admin)
-    - Extract ZIP file contents to problem data directory
-    - Update problem's data_path field
-    - Return success with data_path
+    - Return the assigned id
     */
 });
 
 // 作者或管理员编辑题目
 router.post('/problem/edit', requirePermission('can_manage_problems'), upload.none(), async (req, res) => {
     const user = req.user;
-    const { id, pid, title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, opened, selected } = req.body;
+    const { id, title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, opened, selected } = req.body;
     const idErr = validateInt(id, { positive: true });
     if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });
     /*
     DB Interface, waiting for implement
 
-    Input: id (int, required), pid (string, optional, admin only), title (string, optional),
+    Input: id (int, required), title (string, optional),
             background (string, optional), description (string, optional),
             inputfmt (string, optional), outputfmt (string, optional),
             hint (string, optional), timelm (int, optional), memlm (int, optional),
@@ -220,7 +175,6 @@ router.post('/problem/edit', requirePermission('can_manage_problems'), upload.no
 
     Expected middleware behavior:
     - Verify user has permission (author or admin)
-    - Only admin can modify pid and selected fields
     - Update only the provided fields
     - Return success or error
     */

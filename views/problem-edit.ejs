@@ -12,10 +12,32 @@
     <script src="/assets/katex.min.js"></script>
     <script src="/assets/auto-render.min.js"></script>
     <style>
-        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .editor-pane { background: var(--bg-secondary); padding: 12px; border-radius:8px; }
-        .sample-list { margin-top:8px; }
-        .sample-item { display:flex; gap:8px; margin-bottom:6px; }
+        .problem-editor-container { max-width: 1440px; }
+        #problem-form { width: 100%; }
+        .problem-form-section { margin-top: 16px; }
+        .problem-form-section > label { display: block; margin-bottom: 6px; font-weight: 600; }
+        .problem-form-section input,
+        .problem-form-section textarea { width: 100%; }
+        .problem-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .problem-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .problem-metadata .problem-form-section { min-width: 0; }
+        .markdown-field textarea { display: block; }
+        .markdown-preview {
+            display: none;
+            margin-top: 8px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            overflow-wrap: anywhere;
+        }
+        .markdown-preview.active { display: block; }
+        .sample-item { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+        .problem-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+        @media (max-width: 700px) {
+            .problem-limits, .problem-metadata { grid-template-columns: 1fr; gap: 0; }
+            .sample-item { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -23,133 +45,219 @@
     <div class="nav-left"><%- navigation %></div>
 </nav>
 <main class="page">
-    <div class="container">
+    <div class="container problem-editor-container">
         <h1><%- title %></h1>
         <form id="problem-form">
-            <div style="display:flex;gap:12px;align-items:center;">
-                <input name="title" placeholder="题目标题" required style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);" value="<%= problem ? problem.title : '' %>">
+            <div class="problem-form-section">
+                <label for="problem-title">题目名称</label>
+                <input id="problem-title" name="title" required maxlength="200" value="<%= problem ? problem.title : '' %>">
             </div>
-            <div class="editor-grid" style="margin-top:12px;">
-                <div class="editor-pane">
-                    <label>题目描述 (Markdown)</label>
-                    <textarea name="description" id="description" rows="10" style="width:100%;"><%= problem ? problem.description : '' %></textarea>
-                    <label style="margin-top:8px;display:block;">背景</label>
-                    <textarea name="background" id="background" rows="4" style="width:100%;"><%= problem ? problem.background : '' %></textarea>
-                    <label style="margin-top:8px;display:block;">输入格式</label>
-                    <textarea name="inputfmt" rows="2" style="width:100%;"></textarea>
-                    <label style="margin-top:8px;display:block;">输出格式</label>
-                    <textarea name="outputfmt" rows="2" style="width:100%;"></textarea>
+
+            <div class="problem-limits">
+                <div class="problem-form-section">
+                    <label for="time-limit">时间限制 (ms)</label>
+                    <input id="time-limit" type="number" name="timelimit" min="1" required value="<%= problem ? problem.timelm : 1000 %>">
                 </div>
-                <div class="editor-pane">
-                    <label>实时预览</label>
-                    <div id="preview" style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;min-height:300px;overflow:auto;"></div>
-                    <label style="margin-top:8px;display:block;">样例</label>
-                    <div id="sample-area">
-                        <% if (problem && problem.sample && problem.sample.length>0) { %>
-                            <% problem.sample.forEach(function(s){ %>
-                                <div class="sample-item"><input name="sample_input" placeholder="输入" style="flex:1;padding:6px;" value="<%= s.input %>"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;" value="<%= s.output %>"><button type="button" class="remove-sample">移除</button></div>
-                            <% }); %>
-                        <% } else { %>
-                        <div class="sample-item"><input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" id="add-sample">添加</button></div>
-                        <% } %>
-                    </div>
+                <div class="problem-form-section">
+                    <label for="memory-limit">空间限制 (KB)</label>
+                    <input id="memory-limit" type="number" name="memorylimit" min="1" required value="<%= problem ? problem.memlm : 262144 %>">
                 </div>
             </div>
-            <div style="margin-top:12px;display:flex;gap:8px;">
-                <button type="submit" style="background:var(--primary);color:#fff;padding:8px 12px;border-radius:6px;border:none;"><%= problem ? '保存修改' : '提交题目（默认不公开）' %></button>
-                <a href="/problem/list">取消</a>
+
+            <% for (const field of [
+                { name: 'background', label: '题目背景', rows: 5 },
+                { name: 'description', label: '题目描述', rows: 10 },
+                { name: 'inputfmt', label: '输入格式', rows: 5 },
+                { name: 'outputfmt', label: '输出格式', rows: 5 }
+            ]) { %>
+            <div class="problem-form-section markdown-field">
+                <label for="field-<%= field.name %>"><%= field.label %></label>
+                <textarea id="field-<%= field.name %>" name="<%= field.name %>" rows="<%= field.rows %>"><%= problem ? (problem[field.name] || '') : '' %></textarea>
+                <div class="markdown-preview" data-preview-for="<%= field.name %>" aria-live="polite"></div>
             </div>
-            <div style="margin-top:8px;">
-                <% if (problem) { %>
-                    <% if (admin || (user && problem.author === user.username)) { %>
-                        <label style="margin-right:12px;"><input type="checkbox" name="opened" <%= problem.opened ? 'checked' : '' %> > 公开</label>
+            <% } %>
+
+            <div class="problem-form-section">
+                <label>样例</label>
+                <div id="sample-area">
+                    <% if (problem && problem.sample && problem.sample.length > 0) { %>
+                        <% problem.sample.forEach(function(sample) { %>
+                            <div class="sample-item">
+                                <textarea name="sample_input" rows="3" placeholder="样例输入"><%= sample.input || '' %></textarea>
+                                <textarea name="sample_output" rows="3" placeholder="样例输出"><%= sample.output || '' %></textarea>
+                                <button type="button" class="remove-sample">移除</button>
+                            </div>
+                        <% }); %>
                     <% } else { %>
-                        <div>公开: <strong><%= problem.opened ? '是' : '否' %></strong></div>
+                        <div class="sample-item">
+                            <textarea name="sample_input" rows="3" placeholder="样例输入"></textarea>
+                            <textarea name="sample_output" rows="3" placeholder="样例输出"></textarea>
+                            <button type="button" class="remove-sample">移除</button>
+                        </div>
                     <% } %>
+                </div>
+                <button type="button" id="add-sample">添加样例</button>
+            </div>
+
+            <div class="problem-form-section markdown-field">
+                <label for="field-hint">说明提示</label>
+                <textarea id="field-hint" name="hint" rows="5"><%= problem ? (problem.hint || '') : '' %></textarea>
+                <div class="markdown-preview" data-preview-for="hint" aria-live="polite"></div>
+            </div>
+
+            <div class="problem-metadata">
+                <div class="problem-form-section">
+                    <label for="difficulty">难度</label>
+                    <input id="difficulty" name="difficulty" value="<%= problem ? (problem.difficulty || '') : '' %>">
+                </div>
+                <% if (problem) { %>
+                <div class="problem-form-section">
+                    <label>最后更新</label>
+                    <div><%= problem.time || '—' %></div>
+                </div>
+                <div class="problem-form-section">
+                    <label>最后更新者 UID</label>
+                    <div><%= problem.author || '—' %></div>
+                </div>
                 <% } %>
             </div>
-        </form>
-        <% if (problem) { %>
-        <div style="margin-top:16px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
-            <h3>上传数据与检查器</h3>
-            <div style="margin-top:8px;">
-                <label>上传数据包 (ZIP)</label>
-                <input type="file" id="data-file">
-                <button id="upload-data">上传数据</button>
+
+            <% if (problem && (admin || (user && (Number(problem.author) === Number(user.id) || problem.author === user.username)))) { %>
+            <div class="problem-form-section">
+                <label><input type="checkbox" name="opened" <%= problem.opened ? 'checked' : '' %>> 公开题目</label>
             </div>
-            <div id="upload-result" style="margin-top:8px;color:var(--muted);"></div>
-        </div>
+            <% } %>
+
+            <div class="problem-actions">
+                <button type="submit"><%= problem ? '保存修改' : '提交题目' %></button>
+                <a href="/problem/list">取消</a>
+            </div>
+        </form>
+
+        <% if (problem) { %>
+        <section class="problem-form-section">
+            <h2>上传测试数据</h2>
+            <label for="data-file">数据包 (ZIP)</label>
+            <input type="file" id="data-file" accept=".zip">
+            <button type="button" id="upload-data">上传数据</button>
+            <div id="upload-result" role="status" aria-live="polite"></div>
+        </section>
         <% } %>
     </div>
 </main>
 <script>
-    function renderPreview(){
-        const md = document.getElementById('description').value || '';
-        const html = marked.parse(md);
-        document.getElementById('preview').innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
-        if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.getElementById('preview'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});
+    const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'hint'];
+
+    function renderMarkdownPreview(field) {
+        const textarea = document.getElementById(`field-${field}`);
+        const preview = document.querySelector(`[data-preview-for="${field}"]`);
+        const html = marked.parse(textarea.value || '');
+        preview.innerHTML = DOMPurify.sanitize(html);
+        if (typeof renderMathInElement !== 'undefined') {
+            renderMathInElement(preview, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false }
+                ]
+            });
+        }
     }
-    document.getElementById('description').addEventListener('input', renderPreview);
-    document.getElementById('background').addEventListener('input', renderPreview);
-    renderPreview();
 
-    document.getElementById('add-sample')?.addEventListener('click', ()=>{
-        const container = document.getElementById('sample-area');
-        const div = document.createElement('div'); div.className='sample-item';
-        div.innerHTML = '<input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" class="remove-sample">移除</button>';
-        container.appendChild(div);
-        div.querySelector('.remove-sample').addEventListener('click', ()=>div.remove());
-    });
-    // attach remove handlers to any existing sample items
-    document.querySelectorAll('#sample-area .remove-sample').forEach(btn=>btn.addEventListener('click', e=>{ e.target.closest('.sample-item').remove(); }));
-
-    document.getElementById('problem-form').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const form = e.target;
-        const data = new FormData(form);
-        // gather samples
-        const samples = [];
-        document.querySelectorAll('#sample-area .sample-item').forEach(si=>{
-            const inp = si.querySelector('input[name="sample_input"]')?.value || '';
-            const out = si.querySelector('input[name="sample_output"]')?.value || '';
-            if (inp || out) samples.push({input: inp, output: out});
+    for (const field of markdownFields) {
+        const textarea = document.getElementById(`field-${field}`);
+        const preview = document.querySelector(`[data-preview-for="${field}"]`);
+        textarea.addEventListener('focus', () => {
+            document.querySelectorAll('.markdown-preview.active').forEach(item => item.classList.remove('active'));
+            preview.classList.add('active');
+            renderMarkdownPreview(field);
         });
+        textarea.addEventListener('blur', () => preview.classList.remove('active'));
+        textarea.addEventListener('input', () => renderMarkdownPreview(field));
+    }
+
+    function addSample(input = '', output = '') {
+        const item = document.createElement('div');
+        item.className = 'sample-item';
+        const inputField = document.createElement('textarea');
+        inputField.name = 'sample_input';
+        inputField.rows = 3;
+        inputField.placeholder = '样例输入';
+        inputField.value = input;
+        const outputField = document.createElement('textarea');
+        outputField.name = 'sample_output';
+        outputField.rows = 3;
+        outputField.placeholder = '样例输出';
+        outputField.value = output;
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'remove-sample';
+        removeButton.textContent = '移除';
+        removeButton.addEventListener('click', () => item.remove());
+        item.append(inputField, outputField, removeButton);
+        document.getElementById('sample-area').appendChild(item);
+    }
+
+    document.getElementById('add-sample').addEventListener('click', () => addSample());
+    document.querySelectorAll('.remove-sample').forEach(button => {
+        button.addEventListener('click', () => button.closest('.sample-item').remove());
+    });
+
+    document.getElementById('problem-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const samples = Array.from(document.querySelectorAll('#sample-area .sample-item'))
+            .map(item => ({
+                input: item.querySelector('[name="sample_input"]').value,
+                output: item.querySelector('[name="sample_output"]').value
+            }))
+            .filter(sample => sample.input || sample.output);
         const payload = {
-            title: form.title.value,
-            description: form.description.value,
-            background: form.background.value,
-            inputfmt: form.inputfmt.value,
-            outputfmt: form.outputfmt.value,
+            title: form.elements.title.value,
+            timelimit: Number(form.elements.timelimit.value),
+            memorylimit: Number(form.elements.memorylimit.value),
+            difficulty: form.elements.difficulty.value,
+            background: form.elements.background.value,
+            description: form.elements.description.value,
+            inputfmt: form.elements.inputfmt.value,
+            outputfmt: form.elements.outputfmt.value,
+            hint: form.elements.hint.value,
             sample: JSON.stringify(samples)
         };
-        // include opened/selected when present
-        const openedEl = form.querySelector('input[name="opened"]');
-        if (openedEl) payload.opened = openedEl.checked ? 1 : 0;
-        const selectedEl = form.querySelector('input[name="selected"]');
-        if (selectedEl) payload.selected = selectedEl.checked ? 1 : 0;
-        let url, method = 'PUT';
-        url = '/api/problem/edit/<%= problem.id %>';
-        payload.id = '<%= problem.id %>';
-        const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-        const j = await res.json();
-        if (j.status === 'Y') {
-            if (j.pid) alert('创建成功，题目 PID: ' + j.pid);
-            else alert('保存成功');
+        if (form.elements.opened) payload.opened = form.elements.opened.checked ? 1 : 0;
+
+        try {
+            const response = await fetch('/api/problem/edit/<%= problem ? problem.id : "" %>', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status !== 'Y') throw new Error(result.error || '题目保存失败');
+            alert('保存成功');
             window.location.href = '/problem/list';
-        } else {
-            alert('操作失败: ' + (j.error||'未知错误'));
+        } catch (err) {
+            alert('保存失败: ' + err.message);
         }
     });
 
-    // 上传数据 & 检查器（仅在编辑页面出现）
-    <% if (typeof problem !== 'undefined' && problem) { %>
-    document.getElementById('upload-data').addEventListener('click', async ()=>{
+    <% if (problem) { %>
+    document.getElementById('upload-data').addEventListener('click', async () => {
         const file = document.getElementById('data-file').files[0];
         if (!file) return alert('请选择 ZIP 文件');
-        const fd = new FormData(); fd.append('file', file);
-        const res = await fetch(`/problem/<%= problem.id %>/upload-data`, { method: 'POST', body: fd });
-        const j = await res.json();
-        document.getElementById('upload-result').innerText = j.status === 'Y' ? j.message : ('上传失败: ' + (j.error||''));
+        const formData = new FormData();
+        formData.append('file', file);
+        const resultNode = document.getElementById('upload-result');
+        try {
+            const response = await fetch('/api/admin/problem/<%= problem.id %>/upload-data', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (result.status !== 'Y') throw new Error(result.error || '上传失败');
+            resultNode.textContent = `上传成功，共 ${result.file_count} 个文件`;
+        } catch (err) {
+            resultNode.textContent = '上传失败: ' + err.message;
+        }
     });
     <% } %>
 </script>

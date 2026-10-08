@@ -21,6 +21,13 @@ const DEFAULT_CONFIG = {
         hackIdleTimeout: 1000,
         hackMaxChannels: 64,
     },
+    upload: {
+        tempDir: '/tmp/cbcoj_upload_temp',
+        maxZipSizeBytes: 50 * 1024 * 1024,
+        maxExpandedSizeBytes: 256 * 1024 * 1024,
+        maxEntrySizeBytes: 64 * 1024 * 1024,
+        maxEntryCount: 2000,
+    },
     logging: {
         level: 'info',
     },

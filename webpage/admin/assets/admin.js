@@ -606,7 +606,7 @@ async function loadProblems(page) {
     currentProblemPage = page;
     const cookie = getcookie();
     try {
-        const resp = await fetch(`${BASE_URL}/api/admin/problems?cookie=${cookie}&page=${page}&limit=${problemLimit}`);
+        const resp = await fetch(`${BASE_URL}/api/problems?cookie=${cookie}&page=${page}&limit=${problemLimit}`);
         const data = await resp.json();
         if (data.status !== 'Y') throw new Error(data.error);
         renderProblemsTable(data.problems, data.totalPages);
@@ -622,18 +622,16 @@ function renderProblemsTable(problems, totalPages) {
 
     let html = `
         <table class="problem-table">
-            <thead><tr><th>ID</th><th>PID</th><th>标题</th><th>时间(ms)</th><th>内存(KB)</th><th>数据点数</th><th>操作</th></tr></thead>
+            <thead><tr><th>ID</th><th>标题</th><th>时间(ms)</th><th>内存(KB)</th><th>操作</th></tr></thead>
             <tbody>
     `;
     problems.forEach(p => {
         html += `
             <tr>
                 <td>${p.id}</td>
-                <td>${escapeHtml(p.pid)}</td>
                 <td>${escapeHtml(p.title)}</td>
                 <td>${p.timelm}</td>
                 <td>${p.memlm}</td>
-                <td>${p.datacount}</td>
                 <td class="problem-actions">
                     <button class="btn-sm btn-primary edit-problem" data-id="${p.id}">编辑</button>
                     <button class="btn-sm btn-danger delete-problem" data-id="${p.id}">删除</button>
@@ -672,23 +670,23 @@ function showProblemModal(problem = null) {
         <div class="modal-content">
             <h3>${problem ? '编辑题目' : '添加题目'}</h3>
             <form id="problem-form">
-                <div class="form-group"><label>PID</label><input type="text" name="pid" value="${escapeAttr(problem?.pid || '')}" required></div>
                 <div class="form-group"><label>标题</label><input type="text" name="title" value="${escapeAttr(problem?.title || '')}" required></div>
+                <div class="form-row">
+                    <div class="form-group"><label>时间限制(ms)</label><input type="number" name="timelimit" min="1" value="${problem?.timelm || 1000}"></div>
+                    <div class="form-group"><label>空间限制(KB)</label><input type="number" name="memorylimit" min="1" value="${problem?.memlm || 262144}"></div>
+                </div>
                 <div class="form-group"><label>背景</label><textarea name="background">${escapeHtml(problem?.background || '')}</textarea></div>
                 <div class="form-group"><label>题目描述</label><textarea name="description" required>${escapeHtml(problem?.description || '')}</textarea></div>
                 <div class="form-group"><label>输入格式</label><textarea name="inputfmt">${escapeHtml(problem?.inputfmt || '')}</textarea></div>
                 <div class="form-group"><label>输出格式</label><textarea name="outputfmt">${escapeHtml(problem?.outputfmt || '')}</textarea></div>
-                <div class="form-group"><label>提示</label><textarea name="hint">${escapeHtml(problem?.hint || '')}</textarea></div>
                 <div class="form-row">
-                    <div class="form-group"><label>时间限制(ms)</label><input type="number" name="timelm" value="${problem?.timelm || 1000}"></div>
-                    <div class="form-group"><label>内存限制(KB)</label><input type="number" name="memlm" value="${problem?.memlm || 262144}"></div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group"><label>数据点数量</label><input type="number" name="datacount" value="${problem?.datacount || 0}"></div>
                     <div class="form-group"><label>样例(JSON数组)</label><input type="text" name="sample" value='${escapeAttr(problem?.sample ? JSON.stringify(problem.sample) : '[]')}'></div>
                 </div>
-                <div class="form-group"><label>数据路径</label><input type="text" name="data_path" id="data_path_input" value="${escapeAttr(problem?.data_path || '')}"></div>
-                <div class="form-group"><label>检查器路径</label><input type="text" name="checker_path" id="checker_path_input" value="${escapeAttr(problem?.checker_path || '')}"></div>
+                <div class="form-group"><label>说明提示</label><textarea name="hint">${escapeHtml(problem?.hint || '')}</textarea></div>
+                <div class="form-group"><label>难度</label><input type="text" name="difficulty" value="${escapeAttr(problem?.difficulty || '')}"></div>
+                ${problem ? `<div>最后更新: ${escapeHtml(problem.time || '—')}；更新者 UID: ${escapeHtml(problem.author || '—')}</div>` : ''}
+                ${problem ? `<div class="form-group"><label><input type="checkbox" name="opened" ${problem.opened ? 'checked' : ''}> 公开题目</label></div>` : ''}
+                ${problem ? `<div class="form-group"><label>ID</label><span>${escapeHtml(problem.id || '')}</span></div>` : ''}
             </form>
     `;
 
@@ -700,19 +698,11 @@ function showProblemModal(problem = null) {
                     <input type="file" id="dataFileInput" accept=".zip" />
                     <button class="btn-sm btn-primary" id="uploadDataBtn" data-problem-id="${problem.id}">上传数据包</button>
                 </div>
-                <div class="path-display" id="dataPathDisplay">当前路径: ${escapeHtml(problem.data_path || '未设置')}</div>
-            </div>
-            <div class="upload-section">
-                <h4>🔧 自定义检查器上传 (.cpp)</h4>
-                <div class="upload-row">
-                    <input type="file" id="checkerFileInput" accept=".cpp" />
-                    <button class="btn-sm btn-primary" id="uploadCheckerBtn" data-problem-id="${problem.id}">上传并编译检查器</button>
-                </div>
-                <div class="path-display" id="checkerPathDisplay">当前路径: ${escapeHtml(problem.checker_path || '未设置')}</div>
+                <div class="path-display" id="dataPathDisplay">测试数据上传状态</div>
             </div>
         `;
     } else {
-        formHtml += `<div class="upload-section" style="color: var(--text-secondary);">提示: 题目创建成功后，可在编辑界面上传测试数据和检查器。</div>`;
+        formHtml += `<div class="upload-section" style="color: var(--text-secondary);">提示: 题目创建成功后，可在编辑界面上传测试数据。</div>`;
     }
 
     formHtml += `
@@ -738,17 +728,20 @@ function showProblemModal(problem = null) {
         formData.forEach((value, key) => {
             if (key === 'sample') {
                 try { data[key] = JSON.parse(value); } catch(e) { data[key] = []; }
-            } else if (key === 'timelm' || key === 'memlm' || key === 'datacount') {
+            } else if (key === 'timelimit' || key === 'memorylimit') {
                 data[key] = parseInt(value) || 0;
+            } else if (key === 'opened') {
+                data[key] = true;
             } else {
                 data[key] = value;
             }
         });
+        if (problem) data.opened = form.elements.opened.checked ? 1 : 0;
 
         const cookie = getcookie();
         const url = problem ?
-            `${BASE_URL}/api/admin/problem/${problem.id}?cookie=${cookie}` :
-            `${BASE_URL}/api/admin/problem?cookie=${cookie}`;
+            `${BASE_URL}/api/problem/edit/${problem.id}?cookie=${cookie}` :
+            `${BASE_URL}/api/problem?cookie=${cookie}`;
         const method = problem ? 'PUT' : 'POST';
 
         try {
@@ -774,7 +767,6 @@ function showProblemModal(problem = null) {
         // 上传数据包
         const uploadDataBtn = document.getElementById('uploadDataBtn');
         const dataFileInput = document.getElementById('dataFileInput');
-        const dataPathInput = document.getElementById('data_path_input');
         const dataPathDisplay = document.getElementById('dataPathDisplay');
 
         uploadDataBtn.addEventListener('click', async () => {
@@ -792,9 +784,8 @@ function showProblemModal(problem = null) {
                     body: formData
                 });
                 const result = await resp.json();
-                    if (result.status === 'Y') {
-                    dataPathInput.value = result.data_path;
-                    dataPathDisplay.textContent = '当前路径: ' + result.data_path;
+                if (result.status === 'Y') {
+                    dataPathDisplay.textContent = `上传成功，共 ${result.file_count} 个文件`;
                     await modalAlert('数据包上传成功');
                 } else {
                     await modalAlert('上传失败: ' + (result.error || '未知错误'));
@@ -807,40 +798,6 @@ function showProblemModal(problem = null) {
             }
         });
 
-        // 上传检查器
-        const uploadCheckerBtn = document.getElementById('uploadCheckerBtn');
-        const checkerFileInput = document.getElementById('checkerFileInput');
-        const checkerPathInput = document.getElementById('checker_path_input');
-        const checkerPathDisplay = document.getElementById('checkerPathDisplay');
-        uploadCheckerBtn.addEventListener('click', async () => {
-            const file = checkerFileInput.files[0];
-            if (!file) { await modalAlert('请选择.cpp文件'); return; }
-            const formData = new FormData();
-            formData.append('file', file);
-            const cookie = getcookie();
-            const problemId = uploadCheckerBtn.dataset.problemId;
-            uploadCheckerBtn.disabled = true;
-            uploadCheckerBtn.textContent = '上传中...';
-            try {
-                const resp = await fetch(`${BASE_URL}/api/admin/problem/${problemId}/upload-checker?cookie=${cookie}`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await resp.json();
-                if (result.status === 'Y') {
-                    checkerPathInput.value = result.checker_path;
-                    checkerPathDisplay.textContent = '当前路径: ' + result.checker_path;
-                    await modalAlert('检查器上传并编译成功');
-                } else {
-                    await modalAlert('上传失败: ' + (result.error || '未知错误'));
-                }
-            } catch (err) {
-                alert('请求失败: ' + err.message);
-            } finally {
-                uploadCheckerBtn.disabled = false;
-                uploadCheckerBtn.textContent = '上传并编译检查器';
-            }
-        });
     }
 }
 
@@ -849,7 +806,7 @@ function showAddProblemModal() { showProblemModal(); }
 async function editProblem(id) {
     const cookie = getcookie();
     try {
-        const resp = await fetch(`${BASE_URL}/api/admin/problem/${id}?cookie=${cookie}`);
+        const resp = await fetch(`${BASE_URL}/api/problem/${id}?cookie=${cookie}`);
         const data = await resp.json();
         if (data.status === 'Y') showProblemModal(data);
         else alert('获取题目失败: ' + data.error);
@@ -862,7 +819,7 @@ async function deleteProblem(id) {
     if (!(await modalConfirm('确定删除该题目吗？'))) return;
     const cookie = getcookie();
     try {
-        const resp = await fetch(`${BASE_URL}/api/admin/problem/${id}?cookie=${cookie}`, { method: 'DELETE' });
+        const resp = await fetch(`${BASE_URL}/api/problem/${id}?cookie=${cookie}`, { method: 'DELETE' });
         const data = await resp.json();
         if (data.status === 'Y') {
             await modalAlert('删除成功');
@@ -940,7 +897,7 @@ function renderContestsTable(contests, totalPages) {
 async function getAllProblems() {
     const cookie = getcookie();
     try {
-        const resp = await fetch(`${BASE_URL}/api/admin/problems/all?cookie=${cookie}`);
+        const resp = await fetch(`${BASE_URL}/api/problems/all?cookie=${cookie}`);
         const data = await resp.json();
         if (data.status === 'Y') return data.problems;
         return [];
@@ -970,7 +927,7 @@ async function showContestModal(contest = null) {
     let problemsHtml = '';
     allProblems.forEach(p => {
         const checked = selectedProblemIds.includes(p.id) ? 'checked' : '';
-        problemsHtml += `<label><input type="checkbox" name="problem_ids" value="${p.id}" ${checked}> ${escapeHtml(p.pid)} - ${escapeHtml(p.title)}</label><br>`;
+        problemsHtml += `<label><input type="checkbox" name="problem_ids" value="${p.id}" ${checked}> ${escapeHtml(p.id)} - ${escapeHtml(p.title)}</label><br>`;
     });
 
     modal.innerHTML = `

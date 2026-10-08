@@ -113,10 +113,10 @@ getPermissions(uid)         // → 解析 flag 位
 **适配层需要实现**：
 ```javascript
 // adapter/judge.js
-submit(pid, uid, cid, language, code)  // → S 命令，返回 rid
+submit(id, uid, cid, language, code)  // → S 命令，返回 rid
 getResult(rid, uid)                    // → Q 命令，返回 overview + detail + code
-getRecordList(uid, pid, page)          // → recmng.query_page
-getProblem(pid)                        // → promng
+getRecordList(uid, id, page) // → recmng.query_page
+getProblem(id) // → promng
 getProblemList(page)                   // → promng
 ```
 
@@ -134,7 +134,7 @@ getProblemList(page)                   // → promng
 | 路由 | 方法 | 当前实现 | 改造方式 | 数据来源 |
 |------|------|---------|---------|---------|
 | `/problem/list` | GET | SQL 分页查询 `problems` | 对接中间件 | `promng` |
-| `/problem/:pid` | GET | SQL 查询单个 `problems` | 对接中间件 | `promng` |
+| `/problem/:id` | GET | SQL 查询单个 `problems` | 对接中间件 | `promng` |
 | `/problem/me` | GET | SQL 按作者筛选 | 对接中间件 | `promng` 按作者过滤 |
 
 **需要移除的代码**：
@@ -148,7 +148,7 @@ getProblemList(page)                   // → promng
 ```javascript
 // adapter/problem.js
 getProblemList(page, perPage, filter)   // 分页获取题目列表
-getProblem(pid)                         // 获取单个题目详情
+getProblem(id)                          // 获取单个题目详情
 getMyProblems(username, page)           // 获取当前用户创建的题目
 ```
 
@@ -166,7 +166,7 @@ getMyProblems(username, page)           // 获取当前用户创建的题目
 | `/admin/problem/:id/upload-data` | POST | ZIP 解压 + SQL UPDATE | 对接中间件 | 多信道文件上传协议 |
 | `/admin/problem/:id/upload-checker` | POST | 编译 + SQL UPDATE | 对接中间件 | 多信道文件上传协议 |
 | `/admin/problem/:id/select` | PUT | SQL UPDATE `selected` | 对接中间件 | `promng` 更新精选状态 |
-| `/problem/edit/:pid` | GET | SQL 查询 + EJS 渲染 | 对接中间件 | `promng` 获取题目数据 |
+| `/problem/edit/:id` | GET | SQL 查询 + EJS 渲染 | 对接中间件 | `promng` 获取题目数据 |
 | `/problem/edit` | POST | SQL UPDATE | 对接中间件 | `promng` 更新题目 |
 
 **需要移除的代码**：
@@ -184,8 +184,8 @@ getMyProblems(username, page)           // 获取当前用户创建的题目
 createProblem(data)                     // 创建题目
 updateProblem(id, data)                 // 更新题目
 deleteProblem(id)                       // 删除题目
-uploadProblemData(pid, zipBuffer)       // 多信道上传数据包
-uploadChecker(pid, cppBuffer)           // 多信道上传检查器
+uploadProblemData(id, zipBuffer)        // 多信道上传数据包
+uploadChecker(id, cppBuffer)            // 多信道上传检查器
 setProblemSelected(id, selected)        // 设置精选状态
 ```
 
@@ -214,7 +214,7 @@ setProblemSelected(id, selected)        // 设置精选状态
 getContestList(page)                    // 获取比赛列表
 getContestDetail(id)                    // 获取比赛详情
 getContestRank(id)                      // 获取比赛排名
-submitToContest(contestId, pid, uid, code, language) // 比赛提交
+submitToContest(contestId, id, uid, code, language) // 比赛提交
 createContest(data)                     // 创建比赛（管理）
 updateContest(id, data)                 // 更新比赛（管理）
 deleteContest(id)                       // 删除比赛（管理）
@@ -408,7 +408,7 @@ deleteContest(id)                       // 删除比赛（管理）
 
 4. **改造题库浏览**（`app.js` 页面路由）
    - `/problem/list` → `promng`
-   - `/problem/:pid` → `promng`
+   - `/problem/:id` → `promng`
 
 ### 第二阶段：核心管理功能（P1）
 

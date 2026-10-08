@@ -188,18 +188,18 @@
                 </div>
                 <div class="search-group">
                     <label>📝 题目编号</label>
-                    <input type="text" name="pid" placeholder="例如: P1000" value="<%= pid %>">
+                    <input type="text" name="id" placeholder="题目 ID" value="<%= problemId %>">
                 </div>
                 <button type="submit" class="search-btn">🔍 查询</button>
                 <a href="/record/list" class="reset-btn">重置</a>
             </form>
             
-            <% if (username || pid) { %>
+            <% if (username || problemId) { %>
             <div class="info-note">
                 📌 当前筛选条件：
                 <% if (username) { %>用户名: <strong><%= username %></strong><% } %>
-                <% if (username && pid) { %> &nbsp;|&nbsp; <% } %>
-                <% if (pid) { %>题目: <strong><%= pid %></strong><% } %>
+                <% if (username && problemId) { %> &nbsp;|&nbsp; <% } %>
+                <% if (problemId) { %>题目: <strong><%= problemId %></strong><% } %>
                 &nbsp; <span style="color:#4ea1ff;">(共 <%= total %> 条记录)</span>
             </div>
             <% } else { %>
@@ -225,7 +225,7 @@
                         <% submissions.forEach(sub => { %>
                             <tr>
                                 <td>#<%= sub.id %></td>
-                                <td><a href="/problem/<%= sub.pid %>" class="submission-link"><%= sub.pid %></a></td>
+                                <td><a href="/problem/<%= sub.problem_id %>" class="submission-link"><%= sub.problem_id %></a></td>
                                 <td>
                                     <a href="/profile/<%= sub.username %>" class="submission-link" style="color: <%= sub.name_color || (sub.role === 'admin' || sub.role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>">
                                         <img src="/api/avatar/<%= encodeURIComponent(sub.username) %>" class="avatar" alt="avatar"> <%= sub.username %>
@@ -258,24 +258,24 @@
                 
                 <div class="pagination" style="margin-top: 24px; display: flex; justify-content: center; flex-wrap: wrap;">
                     <% if (page > 1) { %>
-                        <a href="?page=<%= page-1 %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= pid ? '&pid='+encodeURIComponent(pid) : '' %>">上一页</a>
+                        <a href="?page=<%= page-1 %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= problemId ? '&id='+encodeURIComponent(problemId) : '' %>">上一页</a>
                     <% } %>
                     <% 
                         let startPage = Math.max(1, page - 4);
                         let endPage = Math.min(totalPages, page + 4);
                         for (let i = startPage; i <= endPage; i++) { 
                     %>
-                        <a href="?page=<%= i %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= pid ? '&pid='+encodeURIComponent(pid) : '' %>" class="<%= i === page ? 'active' : '' %>"><%= i %></a>
+                        <a href="?page=<%= i %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= problemId ? '&id='+encodeURIComponent(problemId) : '' %>" class="<%= i === page ? 'active' : '' %>"><%= i %></a>
                     <% } %>
                     <% if (page < totalPages) { %>
-                        <a href="?page=<%= page+1 %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= pid ? '&pid='+encodeURIComponent(pid) : '' %>">下一页</a>
+                        <a href="?page=<%= page+1 %><%= username ? '&username='+encodeURIComponent(username) : '' %><%= problemId ? '&id='+encodeURIComponent(problemId) : '' %>">下一页</a>
                     <% } %>
                 </div>
             <% } else { %>
                 <div class="empty-state">
                     <span style="font-size: 48px;">📭</span>
                     <p style="margin-top: 16px;">
-                        <% if (username || pid) { %>
+                        <% if (username || problemId) { %>
                             没有找到符合条件的提交记录。
                             <% if (username && (!user || user.username !== username)) { %>
                                 <br><small>提示：该用户可能未公开代码，或用户不存在。</small>

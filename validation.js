@@ -4,7 +4,7 @@
  */
 
 /**
- * 校验整数字段（用于 id, pid, page 等）
+ * 校验整数字段（用于 id、page 等）
  * @param {*} val - 要校验的值
  * @param {Object} options
  * @param {boolean} options.positive - 是否必须为正整数（默认 true）

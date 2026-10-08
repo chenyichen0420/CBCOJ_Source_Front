@@ -197,14 +197,14 @@ async function getStatistics() {
         const resp = await conn.send('S', pool.packParams([]));
         if (resp.command !== 'Y') throw new Error('Statistics query failed');
 
-        // AccountSession's S response order is rid, pid, cid, uid, hid.
+        // AccountSession's S response order is record count, problem count, contest count, user count, hack count.
         const values = pool.parsePack(resp.data).map(part => part.toString('utf8'));
 
         if (values.length !== 5 || values.some(value => !/^\d+$/.test(value))) {
             throw new Error('Invalid statistics response');
         }
 
-        // Homepage order: problems (pid), users (uid), submissions (rid), contests (cid).
+        // Homepage order: problems, users, submissions, contests.
         return [values[1], values[3], values[0], values[2]].map(value => `${value}+`);
     } catch (err) {
         logger.logError('Error during getting homepage statistics', err);
@@ -257,30 +257,30 @@ function decodeStatement(statement) {
     }));
 }
 
-async function getProblemFromMiddleware(pid, fields = ['id', 'pid', 'title', 'timelimit', 'memorylimit', 'author', 'statement', 'open']) {
+async function getProblemFromMiddleware(id, fields = ['id', 'title', 'difficulty', 'timelimit', 'memorylimit', 'time', 'author', 'statement', 'open']) {
     const conn = pool.getJudge();
-    const resp = await conn.send('P', pool.packParams([String(pid), ...fields]));
+    const resp = await conn.send('P', pool.packParams([String(id), ...fields]));
     if (resp.command !== 'Y') return null;
     const parts = pool.parsePack(resp.data);
     if (parts.length !== fields.length) throw new Error('Invalid problem response');
 
     const values = Object.fromEntries(fields.map((field, index) => {
         const value = parts[index].toString('utf8');
-        return [field, field === 'id' || field === 'pid' || field === 'open' || field === 'statement'
+        return [field, field === 'id' || field === 'open' || field === 'statement'
             ? value : decodeStoredText(value)];
     }));
     const statement = values.statement || '{}';
     const content = decodeStatement(statement);
 
     const problem = {
-        id: Number(values.id),
-        pid: values.pid || `C${pid}`,
+        id: values.id || String(id),
         title: values.title || '',
+        difficulty: values.difficulty || '',
         timelm: Number(values.timelimit) || 0,
         memlm: Number(values.memorylimit) || 0,
+        time: values.time || '',
         author: values.author || '',
         opened: values.open === '1' || values.open === 'open',
-        selected: false,
         sample: []
     };
     Object.assign(problem, content);
@@ -336,7 +336,7 @@ app.get('/problem/list', async (req, res) => {
     const perPage = 10;
     const offset = (page - 1) * perPage + 1;
     const isAdmin = await checkAdmin(req);
-    const canmngproblem = await checkPermission(req.user.id, 'can_manage_problems');
+    const canmngproblem = req.user?.id != null ? await checkPermission(req.user.id, 'can_manage_problems') : false;
     try {
         const conn = pool.getJudge();
         const resp = await conn.send('L', pool.packParams([String(offset), String(perPage), canmngproblem ? '1' : '0']));
@@ -346,10 +346,15 @@ app.get('/problem/list', async (req, res) => {
         const total = Number(parts.shift());
         if (!Number.isInteger(total) || total < 0) throw new Error('Invalid total count');
         const ids = parts;
-        const problems = await Promise.all(ids.map(async id => {
-            const problem = await getProblemFromMiddleware(id, ['title']);
-            return { id: `${id}`, title: problem ? problem.title : '' };
+        const results = await Promise.all(ids.map(async id => {
+            const problem = await getProblemFromMiddleware(id);
+            if (!problem) {
+                await logger.logError(`Problem list: failed to load problem ${id}`, new Error('Problem query rejected by middleware'));
+                return null;
+            }
+            return { id: `${id}`, title: problem.title };
         }));
+        const problems = results.filter(problem => problem !== null);
         const totalPages = Math.max(1, Math.ceil(total / perPage));
 
         // pagination links: first, current-5..current+5, last (unique, sorted)
@@ -369,7 +374,7 @@ app.get('/problem/list', async (req, res) => {
     }
 });
 
-// 新建题目编辑页面（放在 /problem/:pid 路由之前，避免被参数路由捕获）
+// 新建题目编辑页面（放在 /problem/:id 路由之前，避免被参数路由捕获）
 app.get('/problem/new', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
     const isAdmin = await checkAdmin(req);
     const nav = isAdmin ? navigationAdmin : navigation;
@@ -377,41 +382,43 @@ app.get('/problem/new', requireLogin, requirePermission('can_manage_problems'), 
 });
 
 // 题目详情
-app.get('/problem/:pid', async (req, res) => {
-    const pid = req.params.pid;
-    const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
-    if (pidErr) return res.status(400).send(`pid: ${pidErr}`);
+app.get('/problem/:id', async (req, res) => {
+    const id = req.params.id;
+    const idErr = validateString(id, { minLen: 1, maxLen: 50 });
+    if (idErr) return res.status(400).send(`id: ${idErr}`);
     try {
-        const problem = await getProblemFromMiddleware(pid);
+        const problem = await getProblemFromMiddleware(id);
         if (!problem) return res.status(404).send('题目不存在');
         const isAdmin = await checkAdmin(req);
-        if (!problem.opened && (!req.user || req.user.username !== problem.author) && !isAdmin) {
+        const canmngproblem = req.user?.id != null ? await checkPermission(req.user.id, 'can_manage_problems') : false;
+        if (!problem.opened && !canmngproblem) {
             return res.status(403).send('该题目尚未公开');
         }
         problem.author_meta = await getAuthorMeta(problem.author);
         const nav = isAdmin ? navigationAdmin : navigation;
-        res.render('problem', { problem, navigation: nav, user: req.user });
+        res.render('problem', { problem, navigation: nav, user: req.user, canmngproblem });
     } catch (err) {
-        logger.logError(`Problem detail failed for ${pid}: ${err.message}`, err);
+        logger.logError(`Problem detail failed for ${id}: ${err.message}`, err);
         res.status(502).send('题目信息获取失败');
     }
 });
 
 
 // 编辑题目界面（作者或有权限的用户）
-app.get('/problem/edit/:pid', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
-    const pid = req.params.pid;
-    const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
-    if (pidErr) return res.status(400).send(`pid: ${pidErr}`);
+app.get('/problem/edit/:id', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
+    const id = req.params.id;
+    const idErr = validateString(id, { minLen: 1, maxLen: 50 });
+    if (idErr) return res.status(400).send(`id: ${idErr}`);
     try {
-        const problem = await getProblemFromMiddleware(pid);
+        const problem = await getProblemFromMiddleware(id);
         if (!problem) return res.status(404).send('题目不存在');
         const isAdmin = await checkPermission(req.user.id, 'can_manage_problems');
-        if (!isAdmin && req.user.username !== problem.author) return res.status(403).send('无权编辑该题目');
+        const isAuthor = Number(req.user.id) === Number(problem.author) || req.user.username === problem.author;
+        if (!isAdmin && !isAuthor) return res.status(403).send('无权编辑该题目');
         const nav = isAdmin ? navigationAdmin : navigation;
         res.render('problem-edit', { title: '编辑题目', navigation: nav, user: req.user, admin: isAdmin, problem });
     } catch (err) {
-        logger.logError(`Problem edit page failed for ${pid}: ${err.message}`, err);
+        logger.logError(`Problem edit page failed for ${id}: ${err.message}`, err);
         res.status(502).send('题目信息获取失败');
     }
 });
@@ -481,10 +488,10 @@ app.get('/record/list', async (req, res) => {
         const unErr = validateString(username, { minLen: 1, maxLen: 100 });
         if (unErr) return res.status(400).send(`username: ${unErr}`);
     }
-    let pid = req.query.pid || '';
-    if (pid) {
-        const pidErr = validateString(pid, { minLen: 1, maxLen: 50 });
-        if (pidErr) return res.status(400).send(`pid: ${pidErr}`);
+    let problemId = req.query.id || '';
+    if (problemId) {
+        const idErr = validateString(problemId, { minLen: 1, maxLen: 50 });
+        if (idErr) return res.status(400).send(`id: ${idErr}`);
     }
     
     const isAdmin = await checkAdmin(req);
@@ -493,13 +500,13 @@ app.get('/record/list', async (req, res) => {
     /*
     DB Interface, waiting for implement
 
-    Input: username (string, optional), pid (string, optional), page (int, 1-based), user (from auth)
-    Output: { total, totalPages, submissions: [{ id, pid, submit_time, status, username, user_id, role, badge, name_color, statusText, isOwn }, ...] }
+    Input: username (string, optional), id (string, optional), page (int, 1-based), user (from auth)
+    Output: { total, totalPages, submissions: [{ id, problem_id, submit_time, status, username, user_id, role, badge, name_color, statusText, isOwn }, ...] }
 
     Expected middleware behavior:
     - Get paginated submission list
     - Filter by username (if provided, check pubcode permission)
-    - Filter by pid (if provided)
+    - Filter by problem id (if provided)
     - Non-admin: only show public submissions (pubcode='yes')
     - Return submissions with status descriptions
     - Mark isOwn if submission belongs to current user
@@ -510,7 +517,7 @@ app.get('/record/list', async (req, res) => {
         page, 
         totalPages, 
         username: username || '',
-        pid: pid || '',
+        problemId: problemId || '',
         total,
         navigation: nav, 
         user: req.user 
@@ -535,7 +542,7 @@ app.get('/record/:rid', requireLogin, async (req, res) => {
     - Calculate totals: totalScore, totalTime, maxMemory
     - Calculate overallCode and overallDesc based on status counts
     - Get user info (username, role, badge, name_color)
-    - Get problem info (pid, title)
+    - Get problem info (problem id, title)
     - Return full data for status page rendering
     */
     const isAdmin = await checkAdmin(req);
@@ -758,10 +765,10 @@ ensureDirs().then(() => {
 
 | 路由 | 标注位置 | 需要的数据 |
 |------|---------|-----------|
-| `/problem/list` | 替换 `pool.query` | 分页题目列表（pid, title） |
+| `/problem/list` | 替换 `pool.query` | 分页题目列表（id, title） |
 | `/problem/me` | 替换 `pool.query` | 当前用户创建的题目列表 |
-| `/problem/:pid` | 替换 `pool.query` | 完整题目详情 + 作者信息 |
-| `/problem/edit/:pid` | 替换 `pool.query` | 完整题目详情（编辑用） |
+| `/problem/:id` | 替换 `pool.query` | 完整题目详情 + 作者信息 |
+| `/problem/edit/:id` | 替换 `pool.query` | 完整题目详情（编辑用） |
 | `/record/list` | 替换 `pool.query` | 分页提交记录（含状态、用户、题目信息） |
 | `/record/:rid` | 替换 `pool.query` | 提交详情 + 测试点结果 + 代码 |
 | `/contests` | 替换 `pool.query` | 分页比赛列表 |
@@ -795,8 +802,8 @@ ensureDirs().then(() => {
 | `/problem/list` | `problemlist.ejs` | 中间件题目列表 |
 | `/problem/new` | `problem-new.ejs` | 无数据依赖 |
 | `/problem/me` | `problemlist.ejs` | 中间件题目列表（按作者） |
-| `/problem/:pid` | `problem.ejs` | 中间件题目详情 |
-| `/problem/edit/:pid` | `problem-edit.ejs` | 中间件题目详情 |
+| `/problem/:id` | `problem.ejs` | 中间件题目详情 |
+| `/problem/edit/:id` | `problem-edit.ejs` | 中间件题目详情 |
 | `/discussions` | `discussions.ejs` | 本地数据库 |
 | `/discussion-detail/:cid` | `discussion-detail.ejs` | 本地数据库 |
 | `/record/list` | `submissionlist.ejs` | 中间件记录列表 |

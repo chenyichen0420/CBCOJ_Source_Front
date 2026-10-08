@@ -61,7 +61,7 @@ document.getElementById('submit-form')?.addEventListener('submit', async functio
 
         // 构建请求 payload
         const payload = {
-            pid: problemId,
+            id: problemId,
             language: formData.get('lan'),
             code: codeBase64
         };

@@ -473,19 +473,19 @@ getPermissions(uid)         // → 解析 flag 位
 <div class="code-header">
     <span class="code-lang">JAVASCRIPT</span>
     <button class="copy-btn" data-code="// adapter/judge.js
-submit(pid, uid, cid, language, code)  // → S 命令，返回 rid
+submit(id, uid, cid, language, code)  // → S 命令，返回 rid
 getResult(rid, uid)                    // → Q 命令，返回 overview + detail + code
-getRecordList(uid, pid, page)          // → recmng.query_page
-getProblem(pid)                        // → promng
+getRecordList(uid, id, page)          // → recmng.query_page
+getProblem(id)                        // → promng
 getProblemList(page)                   // → promng
 ">复制</button>
 </div>
 <div class="code-content">
     <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/judge.js</span>
-<span class="hljs-title function_">submit</span>(pid, uid, cid, language, code)  <span class="hljs-comment">// → S 命令，返回 rid</span>
+<span class="hljs-title function_">submit</span>(id, uid, cid, language, code)  <span class="hljs-comment">// → S 命令，返回 rid</span>
 <span class="hljs-title function_">getResult</span>(rid, uid)                    <span class="hljs-comment">// → Q 命令，返回 overview + detail + code</span>
-<span class="hljs-title function_">getRecordList</span>(uid, pid, page)          <span class="hljs-comment">// → recmng.query_page</span>
-<span class="hljs-title function_">getProblem</span>(pid)                        <span class="hljs-comment">// → promng</span>
+<span class="hljs-title function_">getRecordList</span>(uid, id, page)          <span class="hljs-comment">// → recmng.query_page</span>
+<span class="hljs-title function_">getProblem</span>(id)                        <span class="hljs-comment">// → promng</span>
 <span class="hljs-title function_">getProblemList</span>(page)                   <span class="hljs-comment">// → promng</span>
 </code></pre>
 </div>
@@ -517,7 +517,7 @@ getProblemList(page)                   // → promng
 <td><code>promng</code></td>
 </tr>
 <tr>
-<td><code>/problem/:pid</code></td>
+<td><code>/problem/:id</code></td>
 <td>GET</td>
 <td>SQL 查询单个 <code>problems</code></td>
 <td>对接中间件</td>
@@ -546,14 +546,14 @@ getProblemList(page)                   // → promng
     <span class="code-lang">JAVASCRIPT</span>
     <button class="copy-btn" data-code="// adapter/problem.js
 getProblemList(page, perPage, filter)   // 分页获取题目列表
-getProblem(pid)                         // 获取单个题目详情
+getProblem(id)                         // 获取单个题目详情
 getMyProblems(username, page)           // 获取当前用户创建的题目
 ">复制</button>
 </div>
 <div class="code-content">
     <pre><code class="hljs language-javascript"><span class="hljs-comment">// adapter/problem.js</span>
 <span class="hljs-title function_">getProblemList</span>(page, perPage, filter)   <span class="hljs-comment">// 分页获取题目列表</span>
-<span class="hljs-title function_">getProblem</span>(pid)                         <span class="hljs-comment">// 获取单个题目详情</span>
+<span class="hljs-title function_">getProblem</span>(id)                         <span class="hljs-comment">// 获取单个题目详情</span>
 <span class="hljs-title function_">getMyProblems</span>(username, page)           <span class="hljs-comment">// 获取当前用户创建的题目</span>
 </code></pre>
 </div>
@@ -614,7 +614,7 @@ getMyProblems(username, page)           // 获取当前用户创建的题目
 <td><code>promng</code> 更新精选状态</td>
 </tr>
 <tr>
-<td><code>/problem/edit/:pid</code></td>
+<td><code>/problem/edit/:id</code></td>
 <td>GET</td>
 <td>SQL 查询 + EJS 渲染</td>
 <td>对接中间件</td>
@@ -647,8 +647,8 @@ getMyProblems(username, page)           // 获取当前用户创建的题目
 createProblem(data)                     // 创建题目
 updateProblem(id, data)                 // 更新题目
 deleteProblem(id)                       // 删除题目
-uploadProblemData(pid, zipBuffer)       // 多信道上传数据包
-uploadChecker(pid, cppBuffer)           // 多信道上传检查器
+uploadProblemData(id, zipBuffer)       // 多信道上传数据包
+uploadChecker(id, cppBuffer)           // 多信道上传检查器
 setProblemSelected(id, selected)        // 设置精选状态
 ">复制</button>
 </div>
@@ -657,8 +657,8 @@ setProblemSelected(id, selected)        // 设置精选状态
 <span class="hljs-title function_">createProblem</span>(data)                     <span class="hljs-comment">// 创建题目</span>
 <span class="hljs-title function_">updateProblem</span>(id, data)                 <span class="hljs-comment">// 更新题目</span>
 <span class="hljs-title function_">deleteProblem</span>(id)                       <span class="hljs-comment">// 删除题目</span>
-<span class="hljs-title function_">uploadProblemData</span>(pid, zipBuffer)       <span class="hljs-comment">// 多信道上传数据包</span>
-<span class="hljs-title function_">uploadChecker</span>(pid, cppBuffer)           <span class="hljs-comment">// 多信道上传检查器</span>
+<span class="hljs-title function_">uploadProblemData</span>(id, zipBuffer)       <span class="hljs-comment">// 多信道上传数据包</span>
+<span class="hljs-title function_">uploadChecker</span>(id, cppBuffer)           <span class="hljs-comment">// 多信道上传检查器</span>
 <span class="hljs-title function_">setProblemSelected</span>(id, selected)        <span class="hljs-comment">// 设置精选状态</span>
 </code></pre>
 </div>
@@ -726,7 +726,7 @@ setProblemSelected(id, selected)        // 设置精选状态
 getContestList(page)                    // 获取比赛列表
 getContestDetail(id)                    // 获取比赛详情
 getContestRank(id)                      // 获取比赛排名
-submitToContest(contestId, pid, uid, code, language) // 比赛提交
+submitToContest(contestId, id, uid, code, language) // 比赛提交
 createContest(data)                     // 创建比赛（管理）
 updateContest(id, data)                 // 更新比赛（管理）
 deleteContest(id)                       // 删除比赛（管理）
@@ -737,7 +737,7 @@ deleteContest(id)                       // 删除比赛（管理）
 <span class="hljs-title function_">getContestList</span>(page)                    <span class="hljs-comment">// 获取比赛列表</span>
 <span class="hljs-title function_">getContestDetail</span>(id)                    <span class="hljs-comment">// 获取比赛详情</span>
 <span class="hljs-title function_">getContestRank</span>(id)                      <span class="hljs-comment">// 获取比赛排名</span>
-<span class="hljs-title function_">submitToContest</span>(contestId, pid, uid, code, language) <span class="hljs-comment">// 比赛提交</span>
+<span class="hljs-title function_">submitToContest</span>(contestId, id, uid, code, language) <span class="hljs-comment">// 比赛提交</span>
 <span class="hljs-title function_">createContest</span>(data)                     <span class="hljs-comment">// 创建比赛（管理）</span>
 <span class="hljs-title function_">updateContest</span>(id, data)                 <span class="hljs-comment">// 更新比赛（管理）</span>
 <span class="hljs-title function_">deleteContest</span>(id)                       <span class="hljs-comment">// 删除比赛（管理）</span>
@@ -1177,7 +1177,7 @@ deleteContest(id)                       // 删除比赛（管理）
 <li><p><strong>改造题库浏览</strong>（<code>app.js</code> 页面路由）</p>
 <ul>
 <li><code>/problem/list</code> → <code>promng</code></li>
-<li><code>/problem/:pid</code> → <code>promng</code></li>
+<li><code>/problem/:id</code> → <code>promng</code></li>
 </ul>
 </li>
 </ol>

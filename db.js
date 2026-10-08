@@ -28,7 +28,8 @@ function packParams(arr) {
 	const result = [];
 	for (const item of arr) {
 		const str = String(item);
-		const len = str.length;
+		const bytes = Buffer.from(str, 'utf8');
+		const len = bytes.length;
 		if (len <= 128 && len > 0) {
 			result.push(Buffer.from([256 - len]));
 		} else {
@@ -38,7 +39,7 @@ function packParams(arr) {
 			b[2] = len & 0xFF;
 			result.push(b);
 		}
-		result.push(Buffer.from(str, 'utf8'));
+		result.push(bytes);
 	}
 	return Buffer.concat(result);
 }
@@ -307,6 +308,7 @@ class HackConnection extends Connection {
 		this.activeChannels = new Set();
 		this.channelResolvers = new Map();
 		this.pendingSubmit = [];
+		this.controlQueue = Promise.resolve();
 		this._processing = false;
 	}
 
@@ -348,28 +350,8 @@ class HackConnection extends Connection {
 		}
 	}
 
-	async allocateChannel() {
-		const seq = 0; // send to control channel (id 0) to request allocation
-		const packet = buildPacket('H', seq, Buffer.alloc(0));
-
-		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				if (this.pending.has(seq)) {
-					this.pending.delete(seq);
-					reject(new Error('Channel allocation timeout'));
-				}
-			}, CONFIG.REQUEST_TIMEOUT);
-
-			this.pending.set(seq, { resolve, reject, timer });
-
-			this.socket.write(packet, (err) => {
-				if (err) {
-					clearTimeout(timer);
-					this.pending.delete(seq);
-					reject(err);
-				}
-			});
-		}).then((resp) => {
+	async allocateChannel(command = 'H') {
+		return this.sendControl(command, Buffer.alloc(0)).then((resp) => {
 			if (resp.command === 'Y') {
 				const parts = parsePack(resp.data);
 				if (parts.length > 0) {
@@ -388,13 +370,19 @@ class HackConnection extends Connection {
 
 	async sendControl(command, data) {
 		// send a control command to control channel id 0 and wait for response
+		const request = this.controlQueue.then(() => this._sendControl(command, data));
+		this.controlQueue = request.catch(() => {});
+		return request;
+	}
+
+	_sendControl(command, data) {
 		const seq = 0;
 		const packet = buildPacket(command, seq, data);
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				if (this.pending.has(seq)) {
 					this.pending.delete(seq);
-					reject(new Error(`Control command timeout`));
+					reject(new Error('Control command timeout'));
 				}
 			}, CONFIG.REQUEST_TIMEOUT);
 
@@ -693,6 +681,63 @@ async function submitHack({ code, input, output, setv, tl, ml, token, cookie }) 
 }
 
 /**
+ * 上传题目测试数据（复用 Hack 多信道连接及 testcase 协议）
+ */
+async function uploadProblemData({ id, files, cookie, contest = -2 }) {
+	if (!id || !cookie || !Array.isArray(files) || files.length === 0) {
+		throw new Error('Missing required upload fields');
+	}
+	if (files.length > 0x7fffffff) {
+		throw new Error('Too many files');
+	}
+	const sliceSize = CONFIG.SLICE_SIZE;
+	if (!Number.isSafeInteger(sliceSize) || sliceSize <= 0) {
+		throw new Error('Invalid middleware slice size');
+	}
+	for (const file of files) {
+		if (!file || typeof file.name !== 'string' || !Buffer.isBuffer(file.data) ||
+			!file.name || /[\/\\\0]/.test(file.name) || Buffer.byteLength(file.name, 'utf8') > 255 ||
+			!(file.name === '.set' || file.name.endsWith('.cpp') || file.name.endsWith('.in') || file.name.endsWith('.out'))) {
+			throw new Error('Invalid upload file');
+		}
+	}
+
+	const hackConn = pool.getHack();
+	let channel = null;
+	try {
+		if (!hackConn.isAvailable()) await hackConn.connect();
+		channel = await hackConn.allocateChannel('T');
+
+		const send = async (command, data, stage) => {
+			const response = await hackConn.sendViaChannel(channel, command, data);
+			if (response.command !== 'Y') {
+				const parts = parsePack(response.data);
+				const message = parts.length === 1
+					? parts[0].toString('utf8')
+					: response.data.toString('utf8');
+				throw new Error(`${stage} failed: ${message || response.command}`);
+			}
+		};
+
+		await send('U', packParams([String(id), String(files.length), String(contest), cookie]), 'Upload initialization');
+
+		for (const file of files) {
+			const chunks = Math.ceil(file.data.length / sliceSize);
+			await send('F', packParams([file.name, String(chunks)]), `File header for ${file.name}`);
+			for (let offset = 0; offset < file.data.length; offset += sliceSize) {
+				await send('D', file.data.subarray(offset, offset + sliceSize), `File data for ${file.name}`);
+			}
+		}
+		return { fileCount: files.length };
+	} catch (err) {
+		logger.logError(`Problem data upload failed: ${err.message}`, err);
+		throw err;
+	} finally {
+		if (channel !== null) hackConn.releaseChannel(channel);
+	}
+}
+
+/**
  * 查询 Hack 结果
  */
 async function queryResult(hid) {
@@ -744,6 +789,7 @@ module.exports = {
 
 	// Hack 连接池特殊方法
 	getHackConn: () => pool.getHack(),
+	uploadProblemData,
 
 	// 内部暴露（调试用）
 	_pool: pool

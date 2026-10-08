@@ -116,8 +116,8 @@
                             <% problems.forEach((p, idx) => { %>
                                 <tr>
                                     <td><%= idx+1 %></td>
-                                    <td><%= p.pid %></td>
-                                    <td><a href="/problem/<%= p.pid %>?contestId=<%= contest.id %>" target="_blank"><%= p.title %></a></td>
+                                    <td><%= p.id %></td>
+                                    <td><a href="/problem/<%= p.id %>?contestId=<%= contest.id %>" target="_blank"><%= p.title %></a></td>
                                     <td><%= p.timelm %> ms</td>
                                     <td><%= p.memlm %> KB</td>
                                 </tr>

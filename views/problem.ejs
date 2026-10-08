@@ -42,7 +42,6 @@
                     <div id="description"><h3>题目描述</h3><div><script type="text/plain" class="raw-markdown"><%= problem.description || '' %></script></div></div>
                     <div id="inputfmt"><h3>输入格式</h3><div><script type="text/plain" class="raw-markdown"><%= problem.inputfmt || '' %></script></div></div>
                     <div id="outputfmt"><h3>输出格式</h3><div><script type="text/plain" class="raw-markdown"><%= problem.outputfmt || '' %></script></div></div>
-                    <div id="hint"><h3>提示</h3><div><script type="text/plain" class="raw-markdown"><%= problem.hint || '' %></script></div></div>
                     <div id="sample">
                         <h3>样例</h3>
                         <% problem.sample.forEach((sample, idx) => { %>
@@ -52,7 +51,7 @@
                             <code class="card" style="margin:5px 5px 10px 5px; padding:5px;"><%= sample.output %></code>
                         <% }) %>
                     </div>
-                    <div id="hint"><h3>提示</h3><div><%- problem.hintHtml %></div></div>
+                    <div id="hint"><h3>提示</h3><div><script type="text/plain" class="raw-markdown"><%= problem.hint || '' %></script></div></div>
                 </div>
                 <div class="submit-form card">
                     <h2>提交代码</h2>
@@ -86,10 +85,8 @@
                         <label for="code-file">代码文件:</label>
                         <input type="file" id="code-file" name="code" required>
                         <button type="submit">提交</button>
-                        <% if (problem.author_meta) { %>
-                            <% if (problem.author_meta.username === user.username || user.role === 'admin' || user.role === 'superadmin') { %>
-                                <a href="/problem/edit/<%= problem.pid %>" style="margin-left:10px;color:#1e90ff;">编辑题目</a>
-                            <% } %>
+                        <% if (canmngproblem) { %>
+                            <a href="/problem/edit/<%= problem.id %>" style="margin-left:10px;color:#1e90ff;">编辑题目</a>
                         <% } %>
                     </form>
                     <div id="submit-message"></div>
@@ -101,7 +98,7 @@
     <script src="/assets/auto-render.min.js"></script>
     <script src="/assets/markdown-renderer.js"></script>
     <script>
-        const problemId = "<%= problem.pid %>";
+        const problemId = "<%= problem.id %>";
     </script>
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
     <script type="text/javascript" src="/assets/problem.js"></script>

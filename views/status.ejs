@@ -40,38 +40,54 @@
                         <h3>评测结果</h3>
                         <p style="color: <%= overallCode === 200 ? 'green' : (overallCode === 408 ? 'lightblue' : (overallCode === 406 ? 'red' : 'white')) %>"><%= overallDesc %></p>
                         <p>时间: <%= totalTime %>ms</p>
-                        <p>内存: <%= (maxMemory / 1024).toFixed(2) %>MB</p>
-                        <p>得分: <%= totalScore / results.length %></p>
-                        <h4>测试点详情</h4>
-                        <details>
-                            <summary>点击查看</summary>
-                            <% results.forEach((r, idx) => { 
-                                let color = '#fff';
-                                if (r.status === 'AC') color = 'green';
-                                else if (r.status === 'TLE') color = 'lightblue';
-                                else if (r.status === 'WA') color = 'red';
-                                else if (r.status === 'RE') color = 'purple';
-                                else if (r.status === 'CE') color = 'orange';
-                            %>
-                            <div class="testcase-card" style="border-left-color: <%= color %>;">
-                                <div class="testcase-card-header">
-                                    <span class="testcase-title" style="color: <%= color %>;">测试点 <%= r.test_point_index %> : <%= r.status %></span>
-                                    <span class="testcase-score"><%= r.score %> 分</span>
+                        <p>内存: <%= (maxMemory / 1024 / 1024).toFixed(2) %>MB</p>
+                        <p>得分: <%= totalScore %></p>
+                        <% if (pending) { %>
+                            <p>评测任务已提交，结果尚未生成，请稍后刷新此页面。</p>
+                        <% } else { %>
+                            <h4>评测详情</h4>
+                            <details>
+                                <summary>查看分组与测试点</summary>
+                                <% results.forEach(r => {
+                                    const color = r.status === 'Accepted' ? 'green'
+                                        : r.status === 'Time Limit Exceeded' || r.status === 'Memory Limit Exceeded' ? 'lightblue'
+                                            : r.status === 'Runtime Error' ? 'purple'
+                                                : r.status === 'Compilation Error' ? 'orange'
+                                                    : r.status === 'Wrong Answer' ? 'red' : '#fff';
+                                %>
+                                <div class="testcase-card" style="border-left-color: <%= color %>;">
+                                    <div class="testcase-card-header">
+                                        <span class="testcase-title" style="color: <%= color %>;">子任务 <%= r.test_point_index %>: <%= r.status %></span>
+                                        <span class="testcase-score"><%= r.score %> 分</span>
+                                    </div>
+                                    <div class="testcase-details">
+                                        <div class="testcase-detail-item"><strong>时间</strong><br><%= r.time_ms %> ms</div>
+                                        <div class="testcase-detail-item"><strong>内存</strong><br><%= (r.memory_bytes / 1024 / 1024).toFixed(2) %> MB</div>
+                                    </div>
+                                    <% if (r.testcases.length) { %>
+                                        <details>
+                                            <summary>测试点明细</summary>
+                                            <% r.testcases.forEach(testcase => { %>
+                                                <div class="testcase-details">
+                                                    <div class="testcase-detail-item">测试点 <%= testcase.test_point_index %>: <%= testcase.status %></div>
+                                                    <div class="testcase-detail-item"><%= testcase.time_ms %> ms</div>
+                                                    <div class="testcase-detail-item"><%= (testcase.memory_bytes / 1024 / 1024).toFixed(2) %> MB</div>
+                                                </div>
+                                            <% }) %>
+                                        </details>
+                                    <% } %>
                                 </div>
-                                <div class="testcase-details">
-                                    <div class="testcase-detail-item"><strong>时间</strong><br><%= r.time_ms || 0 %> ms</div>
-                                    <div class="testcase-detail-item"><strong>内存</strong><br><%= (r.memory_kb / 1024).toFixed(2) || 0 %> MB</div>
-                                </div>
-                                <% if (r.detail) { %>
-                                    <div class="testcase-description"><strong>详细描述</strong><br><%= r.detail %></div>
-                                <% } %>
-                            </div>
-                            <% }) %>
-                        </details>
-                        <details>
-                            <summary>源代码</summary>
-                            <pre class="code"><code><%= sourceCode %></code></pre>
-                        </details>
+                                <% }) %>
+                            </details>
+                        <% } %>
+                        <% if (sourceCode !== null) { %>
+                            <details>
+                                <summary>源代码</summary>
+                                <pre class="code"><code><%= sourceCode %></code></pre>
+                            </details>
+                        <% } else { %>
+                            <p>该用户未公开源代码。</p>
+                        <% } %>
                     </div>
                 </div>
                 <div class="right card">
@@ -84,7 +100,7 @@
                                 <% } %>
                             </p>
                         </div>
-                        <div id="user"><h3>提交时间</h3><p><%= new Date(submission.submit_time).toLocaleString() %></p></div>
+                        <div id="user"><h3>提交时间</h3><p><%= new Date(submission.submit_time).toLocaleString('zh-CN') %></p></div>
                         <div id="user"><h3>提交题目</h3><a href="/problem/<%= submission.problemname %>"><%= submission.problemtitle %></a></div>
                     </div>
                     <div class="card" style="margin-top: 18px; padding: 10px;">

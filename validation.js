@@ -9,19 +9,23 @@
  * @param {Object} options
  * @param {boolean} options.positive - 是否必须为正整数（默认 true）
  * @param {number} options.min - 最小值（默认 1）
+ * @param {number} options.max - 最大值
  * @returns {string|null} 错误信息或 null
  */
 function validateInt(val, options = {}) {
-    const { positive = true, min = positive ? 1 : 0 } = options;
+    const { positive = true, min = positive ? 1 : 0, max } = options;
     if (val === undefined || val === null || val === '') {
         return '参数不能为空';
     }
     const num = Number(val);
-    if (isNaN(num) || !Number.isInteger(num)) {
+    if (!Number.isSafeInteger(num)) {
         return '参数必须为整数';
     }
     if (num < min) {
         return `参数不能小于 ${min}`;
+    }
+    if (max !== undefined && num > max) {
+        return `参数不能大于 ${max}`;
     }
     return null;
 }

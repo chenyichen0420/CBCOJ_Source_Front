@@ -3,6 +3,8 @@ const router = express.Router();
 const pool = require('../db');
 const { requireLogin, requireAdmin, requirePermission, checkPermission } = require('../auth');
 const multer = require('multer');
+const { TextDecoder } = require('util');
+const logger = require('../logger');
 const upload = multer();
 const { validateInt, validateString } = require('../validation');
 
@@ -26,11 +28,11 @@ router.get('/getproblem', requireLogin, async (req, res) => {
 });
 
 router.post('/getproblemlist', requireLogin, express.json(), async (req, res) => {
-    let page = parseInt(req.body.page);
-    if (isNaN(page) || page < 1) page = 1;
-    if (page !== 1) {
-        const err = validateInt(page, { positive: true });
+    let page = 1;
+    if (req.body.page !== undefined) {
+        const err = validateInt(req.body.page, { positive: true, max: 2147483647 });
         if (err) return res.json({ status: 'N', error: `page: ${err}` });
+        page = Number(req.body.page);
     }
     const perPage = 10;
     const offset = (page - 1) * perPage;
@@ -49,7 +51,6 @@ router.post('/getproblemlist', requireLogin, express.json(), async (req, res) =>
 
 router.post('/submit', requireLogin, upload.none(), requirePermission('can_submit_code'), async (req, res) => {
     const { id, code, language } = req.body;
-    const user = req.user;
     const idErr = validateString(id, { minLen: 1, maxLen: 50 });
     if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });
     const codeErr = validateString(code, { minLen: 1 });
@@ -57,76 +58,162 @@ router.post('/submit', requireLogin, upload.none(), requirePermission('can_submi
     const langErr = validateString(language, { minLen: 1, maxLen: 20 });
     if (langErr) return res.json({ status: 'N', error: `language: ${langErr}` });
 
-    /*
-    DB Interface, waiting for implement
+    const pidErr = validateInt(id, { positive: true, max: 2147483647 });
+    if (pidErr) return res.json({ status: 'N', error: `id: ${pidErr}` });
+    const supportedLanguages = new Set([
+        'C++14', 'C++14-O2', 'C++17', 'C++17-O2', 'C++20', 'C++20-O2',
+        'C++23', 'C++23-O2', 'C++23-O3', 'C++26', 'C++26-O2', 'C++26-O3'
+    ]);
+    if (!supportedLanguages.has(language)) {
+        return res.json({ status: 'N', error: '不支持的语言' });
+    }
 
-    Input: id (string), code (string, base64 encoded), language (string), user (from auth)
-    Output: { status: 'Y', rid: string } | { status: 'N', error: string }
+    let sourceCode;
+    try {
+        const source = Buffer.from(code, 'base64');
+        if (source.length === 0 || source.toString('base64') !== code) {
+            return res.json({ status: 'N', error: '代码必须是有效的 Base64 内容' });
+        }
+        sourceCode = new TextDecoder('utf-8', { fatal: true }).decode(source);
+    } catch (err) {
+        return res.json({ status: 'N', error: '代码必须是有效的 UTF-8 内容' });
+    }
 
-    Expected middleware behavior:
-    - Verify problem exists
-    - Submit code to the evaluation queue
-    - The middleware handles: code storage, compilation, and task creation
-    - Return submission id (rid)
-    - Errors: problem not found, invalid language, etc.
-
-    Note: The following code (pool.query, saveCodeFile, compileCode, tasks INSERT)
-          should be REMOVED entirely. The middleware's judger handles all of these.
-    */
+    let cookie = req.body.cookie;
+    if (!cookie && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+        if (match) cookie = decodeURIComponent(match[1]);
+    }
+    try {
+        const response = await pool.getJudge().send('S', pool.packParams([
+            cookie, String(Number(id)), language, sourceCode
+        ]));
+        const parts = pool.parsePack(response.data);
+        if (response.command !== 'Y') {
+            return res.json({ status: 'N', error: parts[0]?.toString('utf8') || '提交失败' });
+        }
+        const rid = parts[0]?.toString('utf8');
+        if (!rid || !/^\d+$/.test(rid)) throw new Error('Invalid submission id from middleware');
+        return res.json({ status: 'Y', rid });
+    } catch (err) {
+        logger.logError(`Code submission failed for user ${req.user.id}, problem ${id}: ${err.message}`, err);
+        return res.status(502).json({ status: 'N', error: '提交服务暂时不可用' });
+    }
 });
 
 router.get('/recordlist', requireLogin, async (req, res) => {
     const target = req.query.target;
-    let page = parseInt(req.query.page) || 1;
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.json({ status: 'N', error: `page: ${err}` });
         page = Number(req.query.page);
     }
-    const perPage = 10;
-    const user = req.user;
-
-    /*
-    DB Interface, waiting for implement
-
-    Input: target (string, optional, problem id or 'all'), page (int, optional, 1-based), user (from auth)
-    Output: { status: 'Y', recordlist: JSON.stringify([rid, ...]), page: totalPages }
-
-    Expected middleware behavior:
-    - Get list of submission ids for the current user
-    - If target is a problem id, filter submissions for that problem
-    - Return JSON string of rid array
-    - Return total page count
-    */
+    let pid = -1;
+    if (target && target !== 'all') {
+        const targetErr = validateInt(target, { positive: true, max: 2147483647 });
+        if (targetErr) return res.json({ status: 'N', error: `target: ${targetErr}` });
+        pid = Number(target);
+    }
+    try {
+        const cookie = getCookie(req);
+        const response = await pool.getJudge().send('I', packParams([
+            cookie, String(req.user.id), String(pid), String(page - 1), String(pool.RECORD_PAGE_SIZE)
+        ]));
+        const parts = parsePack(response.data).map(part => part.toString('utf8'));
+        if (response.command !== 'Y') {
+            return res.json({ status: 'N', error: parts[0] || '评测记录列表获取失败' });
+        }
+        if (parts.length === 0 || (parts.length - 1) % 10 !== 0) {
+            throw new Error('Invalid record index response');
+        }
+        const total = Number(parts[0]);
+        const totalErr = validateInt(total, { positive: false, min: 0 });
+        if (totalErr) throw new Error('Invalid record count');
+        const ids = [];
+        for (let i = 1; i < parts.length; i += 10) ids.push(parts[i]);
+        return res.json({
+            status: 'Y',
+            recordlist: JSON.stringify(ids),
+            page: Math.ceil(total / pool.RECORD_PAGE_SIZE)
+        });
+    } catch (err) {
+        logger.logError(`Record list API failed for user ${req.user.id}: ${err.message}`, err);
+        return res.status(502).json({ status: 'N', error: '评测记录列表获取失败' });
+    }
 });
 
 router.get('/record', requireLogin, async (req, res) => {
     const rid = req.query.rid;
-    const user = req.user;
-    const ridErr = validateString(rid, { minLen: 1, maxLen: 50 });
+    const ridErr = validateInt(rid, { positive: true, max: 2147483647 });
     if (ridErr) return res.json({ status: 'N', error: `rid: ${ridErr}` });
-
-    /*
-    DB Interface, waiting for implement
-
-    Input: rid (string), user (from auth)
-    Output:
-    - If pending: { status: 'P', data: { code: 202, describe: 'Pending' }, uid: user_id }
-    - If finished: { status: 'Y', result: { overview, detail, uid }, code: base64_source }
-
-    Overview fields: code (int), describe (string), time (int, ms), memory (int, bytes), score (int)
-    Detail fields: code (int), describe (string), time (int, ms), memory (int, bytes), score (int), detail (string)
-
-    Expected middleware behavior:
-    - Verify user has permission (own record or can_view_others_submissions)
-    - If submission is pending/judging, return status 'P'
-    - Otherwise, return full result with overview + detail + source code (base64)
-    */
+    try {
+        const cookie = getCookie(req);
+        const [recordResponse, summaryResponse] = await Promise.all([
+            pool.getJudge().send('Q', packParams([cookie, rid])),
+            pool.getJudge().send('V', packParams([cookie, rid]))
+        ]);
+        const recordParts = parsePack(recordResponse.data);
+        if (recordResponse.command !== 'Y') {
+            return res.json({ status: 'N', error: recordParts[0]?.toString('utf8') || '评测记录不可用' });
+        }
+        if (summaryResponse.command !== 'Y') {
+            return res.json({ status: 'N', error: '评测记录不存在或无权查看' });
+        }
+        const summary = parsePack(summaryResponse.data);
+        if (summary.length !== 8 || recordParts.length < 1) {
+            throw new Error('Invalid record response');
+        }
+        const data = pool.parseJudgeResult(recordParts[0].toString('utf8'));
+        const uid = Number(summary[0].toString('utf8'));
+        if (!data.total) {
+            return res.json({
+                status: 'P',
+                data: { code: 202, describe: data.des || 'Judging' },
+                uid
+            });
+        }
+        const detail = Array.isArray(data.detail) ? data.detail.map((subtask, index) => {
+            const total = subtask.total || {};
+            return {
+                test_point_index: index + 1,
+                code: Number(total.c) || 0,
+                describe: total.des || '',
+                time: Number(total.t) || 0,
+                memory: Number(total.m) || 0,
+                score: Number(total.pts) || 0,
+                detail: total.des || ''
+            };
+        }) : [];
+        const result = {
+            overview: {
+                code: Number(data.total.c) || 0,
+                describe: data.total.des || '',
+                time: Number(data.total.t) || 0,
+                memory: Number(data.total.m) || 0,
+                score: Number(data.total.pts) || 0
+            },
+            detail,
+            uid
+        };
+        const responseBody = { status: 'Y', result };
+        if (recordParts.length > 1) {
+            responseBody.code = Buffer.from(recordParts[1]).toString('base64');
+        }
+        return res.json(responseBody);
+    } catch (err) {
+        logger.logError(`Record API failed for ${rid}, user ${req.user.id}: ${err.message}`, err);
+        return res.status(502).json({ status: 'N', error: '评测记录获取失败' });
+    }
 });
 
-function statusToCode(status) {
-    const map = { AC:200, WA:406, TLE:408, MLE:413, RE:502, CE:400, SE:500, PD:202, JG:206 };
-    return map[status] || 404;
+function getCookie(req) {
+    let cookie = req.body?.cookie || req.query?.cookie;
+    if (!cookie && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+        if (match) cookie = decodeURIComponent(match[1]);
+    }
+    return cookie;
 }
 
 // 用户新建题目（默认不公开 opened=0，selected=0），入口在题目列表
@@ -191,9 +278,9 @@ module.exports = router;
 |------|------|---------|------|
 | `/getproblem` | 路由 | 替换 `pool.query` | 获取单个题目详情 |
 | `/getproblemlist` | 路由 | 替换 `pool.query` | 分页获取题目列表 |
-| `/submit` | 路由 | 替换整个路由逻辑 | 提交代码 → 完全由中间件接管 |
-| `/recordlist` | 路由 | 替换 `pool.query` | 获取用户提交记录 ID 列表 |
-| `/record` | 路由 | 替换 `pool.query` | 获取评测详情 |
+| `/submit` | 路由 | 已实现 | 解码 C++ 源码并通过 Judge `S` 提交 |
+| `/recordlist` | 路由 | 已实现 | 通过 Judge `I` 查询当前用户的 uid/pid 索引 |
+| `/record` | 路由 | 已实现 | 通过 Judge `Q`/`V` 获取权限控制后的评测详情 |
 | `saveCodeFile` | 函数 | 已经移除 | 代码存储由中间件接管 |
 | `compileCode` | 函数 | 已经移除 | 编译由中间件的 Judger 接管 |
 | `pool.query` 插入 `submissions` | SQL | 包含在 `/submit` 标注中 | 提交记录由中间件接管 |

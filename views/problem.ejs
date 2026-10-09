@@ -83,7 +83,7 @@
                             <option value="C++26-O3">C++ 26(O3)</option>
                         </select>
                         <label for="code-file">代码文件:</label>
-                        <input type="file" id="code-file" name="code" required>
+                        <input type="file" id="code-file" name="code" accept=".cpp,.cc,.cxx,.c++,.h,.hpp,.hh" required>
                         <button type="submit">提交</button>
                         <% if (canmngproblem) { %>
                             <a href="/problem/edit/<%= problem.id %>" style="margin-left:10px;color:#1e90ff;">编辑题目</a>

@@ -110,7 +110,7 @@ async function getUserPermissions(userId) {
 
     const { admin1, lock1 } = flags;
 
-    // 超级管理员（ADMIN_SADMIN = 0x01）
+    // 提交与查看记录仍受封禁/锁定位约束，和 middle 的最终校验保持一致。
     if (admin1 & 0x01) {
         return {
             can_manage_users: true,
@@ -118,11 +118,11 @@ async function getUserPermissions(userId) {
             can_manage_contests: true,
             can_manage_disk: true,
             can_manage_chat: true,
-            can_submit_code: true,
+            can_submit_code: !(lock1 & 0x03),
             can_create_discussion: true,
             can_reply_discussion: true,
             can_post_message: true,
-            can_view_others_submissions: true,
+            can_view_others_submissions: !(lock1 & 0x11),
         };
     }
 
@@ -132,11 +132,11 @@ async function getUserPermissions(userId) {
         can_manage_contests: !!(admin1 & 0x08),   // ADMIN_CONTEST
         can_manage_disk: !!(admin1 & 0x20),       // ADMIN_FILE
         can_manage_chat: !!(admin1 & 0x10),       // ADMIN_CHAT
-        can_submit_code: !(lock1 & 0x02),         // LOCK_NO_SUBMIT
+        can_submit_code: !(lock1 & 0x03),         // LOCK_USER_BANNED | LOCK_NO_SUBMIT
         can_create_discussion: !(lock1 & 0x04),   // LOCK_NO_DISCUSSION
         can_reply_discussion: !(lock1 & 0x04),    // same
         can_post_message: !(lock1 & 0x08),        // LOCK_NO_CHAT
-        can_view_others_submissions: !(lock1 & 0x10), // LOCK_NO_VIEW_RECORD
+        can_view_others_submissions: !(lock1 & 0x11), // LOCK_USER_BANNED | LOCK_NO_VIEW_RECORD
     };
 }
 
@@ -152,7 +152,10 @@ async function checkPermission(userId, permission) {
 
     const { admin1, lock1 } = flags;
 
-    // 超级管理员拥有所有权限
+    if (permission === 'can_submit_code') return !(lock1 & 0x03);
+    if (permission === 'can_view_others_submissions') return !(lock1 & 0x11);
+
+    // 超级管理员拥有其他管理权限，但不能覆盖提交/查看记录的锁定位。
     if (admin1 & 0x01) return true;
 
     switch (permission) {
@@ -161,11 +164,11 @@ async function checkPermission(userId, permission) {
         case 'can_manage_contests': return !!(admin1 & 0x08);
         case 'can_manage_disk':     return !!(admin1 & 0x20);
         case 'can_manage_chat':     return !!(admin1 & 0x10);
-        case 'can_submit_code':     return !(lock1 & 0x02);
+        case 'can_submit_code':     return !(lock1 & 0x03);
         case 'can_create_discussion': return !(lock1 & 0x04);
         case 'can_reply_discussion':  return !(lock1 & 0x04);
         case 'can_post_message':    return !(lock1 & 0x08);
-        case 'can_view_others_submissions': return !(lock1 & 0x10);
+        case 'can_view_others_submissions': return !(lock1 & 0x11);
         default:
             logger.logError(`checkPermission: unknown permission '${permission}'`, new Error('Unknown permission'));
             return false;

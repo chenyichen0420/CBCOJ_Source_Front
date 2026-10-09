@@ -307,6 +307,52 @@ async function getAuthorMeta(username) {
     };
 }
 
+function getRequestCookie(req) {
+    let cookie = req.body?.cookie || req.query?.cookie;
+    if (!cookie && req.headers.cookie) {
+        const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+        if (match) cookie = decodeURIComponent(match[1]);
+    }
+    return cookie;
+}
+
+async function getUserMetaById(uid) {
+    const conn = pool.getAccount();
+    const resp = await conn.send('U', pool.packParams([
+        'any', String(uid), 'uid', 'username', 'role', 'badge', 'name_color'
+    ]));
+    if (resp.command !== 'Y') return null;
+    const parts = pool.parsePack(resp.data);
+    if (parts.length < 5) throw new Error('Invalid user metadata response');
+    return {
+        uid: Number(parts[0].toString('utf8')),
+        username: parts[1].toString('utf8'),
+        role: parts[2].toString('utf8') || 'user',
+        badge: parts[3].toString('utf8') || null,
+        name_color: parts[4].toString('utf8') || null
+    };
+}
+
+function resultDescription(code) {
+    return ({
+        200: 'Accepted', 400: 'Compilation Error', 406: 'Wrong Answer',
+        408: 'Time Limit Exceeded', 413: 'Memory Limit Exceeded',
+        500: 'System Error', 502: 'Runtime Error', 202: 'In Queue', 206: 'Judging'
+    })[Number(code)] || 'Unknown';
+}
+
+async function getRecordFromMiddleware(cookie, rid) {
+    const response = await pool.getJudge().send('Q', pool.packParams([cookie, String(rid)]));
+    if (response.command !== 'Y') {
+        const parts = pool.parsePack(response.data);
+        return { error: parts[0]?.toString('utf8') || '评测记录不可用' };
+    }
+    const parts = pool.parsePack(response.data);
+    if (parts.length < 1) throw new Error('Invalid record response');
+    const result = pool.parseJudgeResult(parts[0].toString('utf8'));
+    return { result, sourceCode: parts.length > 1 ? parts[1].toString('utf8') : null };
+}
+
 // 首页
 app.get('/', async (req, res) => {
     const stats = await getStatistics();
@@ -327,9 +373,9 @@ app.get('/', async (req, res) => {
 
 // 题库列表
 app.get('/problem/list', async (req, res) => {
-    let page = parseInt(req.query.page) || 1;
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.status(400).send(`page: ${err}`);
         page = Number(req.query.page);
     }
@@ -344,7 +390,7 @@ app.get('/problem/list', async (req, res) => {
         const parts = pool.parsePack(resp.data).map(part => part.toString('utf8'));
         // protocol: first element is total count, following elements are the returned ids for this page
         const total = Number(parts.shift());
-        if (!Number.isInteger(total) || total < 0) throw new Error('Invalid total count');
+        if (validateInt(total, { positive: false, min: 0 })) throw new Error('Invalid total count');
         const ids = parts;
         const results = await Promise.all(ids.map(async id => {
             const problem = await getProblemFromMiddleware(id);
@@ -425,9 +471,9 @@ app.get('/problem/edit/:id', requireLogin, requirePermission('can_manage_problem
 
 // 讨论列表
 app.get('/discussions', async (req, res) => {
-    let page = parseInt(req.query.page) || 1;
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.status(400).send(`page: ${err}`);
         page = Number(req.query.page);
     }
@@ -451,9 +497,9 @@ app.get('/discussion-detail/:cid', async (req, res) => {
     const cid = req.params.cid;
     const cidErr = validateString(cid, { minLen: 1, maxLen: 50 });
     if (cidErr) return res.status(400).send(`cid: ${cidErr}`);
-    let page = parseInt(req.query.page) || 1;
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.status(400).send(`page: ${err}`);
         page = Number(req.query.page);
     }
@@ -473,16 +519,14 @@ app.get('/discussion-detail/:cid', async (req, res) => {
 });
 
 // 提交列表
-app.get('/record/list', async (req, res) => {
-    let page = parseInt(req.query.page) || 1;
+app.get('/record/list', requireLogin, async (req, res) => {
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.status(400).send(`page: ${err}`);
         page = Number(req.query.page);
     }
-    const perPage = 10;
-    const offset = (page - 1) * perPage;
-    
+    const pageSize = pool.RECORD_PAGE_SIZE;
     let username = req.query.username || '';
     if (username) {
         const unErr = validateString(username, { minLen: 1, maxLen: 100 });
@@ -490,71 +534,191 @@ app.get('/record/list', async (req, res) => {
     }
     let problemId = req.query.id || '';
     if (problemId) {
-        const idErr = validateString(problemId, { minLen: 1, maxLen: 50 });
+        const idErr = validateInt(problemId, { positive: true, max: 2147483647 });
         if (idErr) return res.status(400).send(`id: ${idErr}`);
     }
-    
-    const isAdmin = await checkAdmin(req);
-    const currentUserId = req.user ? req.user.id : null;
-    
-    /*
-    DB Interface, waiting for implement
 
-    Input: username (string, optional), id (string, optional), page (int, 1-based), user (from auth)
-    Output: { total, totalPages, submissions: [{ id, problem_id, submit_time, status, username, user_id, role, badge, name_color, statusText, isOwn }, ...] }
+    if(!username && !problemId){
+        username = req.user.username
+    }
 
-    Expected middleware behavior:
-    - Get paginated submission list
-    - Filter by username (if provided, check pubcode permission)
-    - Filter by problem id (if provided)
-    - Non-admin: only show public submissions (pubcode='yes')
-    - Return submissions with status descriptions
-    - Mark isOwn if submission belongs to current user
-    */
-    const nav = isAdmin ? navigationAdmin : navigation;
-    res.render('submissionlist', { 
-        submissions, 
-        page, 
-        totalPages, 
-        username: username || '',
-        problemId: problemId || '',
-        total,
-        navigation: nav, 
-        user: req.user 
-    });
+    try {
+        const targetUser = username ? await getAuthorMeta(username) : null;
+        if (username && targetUser?.uid === undefined) {
+            const isAdmin = await checkAdmin(req);
+            const nav = isAdmin ? navigationAdmin : navigation;
+            return res.render('submissionlist', {
+                submissions: [], page, totalPages: 1, username, problemId, total: 0,
+                navigation: nav, user: req.user
+            });
+        }
+        const uid = targetUser ? targetUser.uid : (problemId ? -1 : Number(req.user.id));
+        const pid = problemId ? Number(problemId) : -1;
+        const response = await pool.getJudge().send('I', pool.packParams([
+            getRequestCookie(req), String(uid), String(pid), String(page - 1), String(pageSize)
+        ]));
+
+        // console.log(response);
+        // console.log(pool.parsePack(response.data).map(part => part.toString('utf8')));
+
+        if (response.command !== 'Y') {
+            const parts = pool.parsePack(response.data);
+            throw new Error(parts[0]?.toString('utf8') || 'Submission index query failed');
+        }
+        const parts = pool.parsePack(response.data).map(part => part.toString('utf8'));
+        if (parts.length === 0 || (parts.length - 1) % 10 !== 0) {
+            throw new Error('Invalid submission index response');
+        }
+        const total = Number(parts[0]);
+        if (validateInt(total, { positive: false, min: 0 })) throw new Error('Invalid submission count');
+        const records = [];
+        for (let i = 1; i < parts.length; i += 10) {
+            records.push({
+                id: parts[i],
+                user_id: Number(parts[i + 1]),
+                problem_id: parts[i + 2],
+                statusCode: Number(parts[i + 3]),
+                score: Number(parts[i + 4]),
+                time_ms: Number(parts[i + 5]),
+                memory_kb: Number(parts[i + 6]),
+                language: Number(parts[i + 7]),
+                submit_time: Number(parts[i + 8]) * 1000,
+                state: parts[i + 9]
+            });
+        }
+        const userIds = [...new Set(records.map(record => record.user_id))];
+        const problemIds = [...new Set(records.map(record => record.problem_id))];
+        const [userEntries, problemEntries] = await Promise.all([
+            Promise.all(userIds.map(async id => [id, await getUserMetaById(id)])),
+            Promise.all(problemIds.map(async id => [id, await getProblemFromMiddleware(id, ['id', 'title'])]))
+        ]);
+        const users = new Map(userEntries);
+        const problems = new Map(problemEntries);
+        const submissions = records.map(record => {
+            const recordUser = users.get(record.user_id) || {
+                username: String(record.user_id), role: 'user', badge: null, name_color: null
+            };
+            const problem = problems.get(record.problem_id);
+            const finalCode = record.state.startsWith('finished:')
+                ? Number(record.state.slice('finished:'.length))
+                : record.statusCode === 1 ? 200 : null;
+            const statusClasses = {
+                200: 'AC', 400: 'CE', 406: 'WA', 408: 'TLE',
+                413: 'MLE', 500: 'SE', 502: 'RE'
+            };
+            let status = statusClasses[finalCode] || 'finished';
+            let statusText = finalCode === null ? '未通过' : resultDescription(finalCode);
+            if (record.statusCode === 1 || finalCode === 200) {
+                status = 'AC';
+                statusText = 'Accepted';
+            } else if (record.state === 'pending') {
+                status = 'pending';
+                statusText = '排队中';
+            } else if (record.state === 'judging') {
+                status = 'judging';
+                statusText = '评测中';
+            }
+            return {
+                ...record,
+                username: recordUser.username,
+                role: recordUser.role,
+                badge: recordUser.badge,
+                name_color: recordUser.name_color,
+                problem_title: problem?.title || `题目 ${record.problem_id}`,
+                status,
+                statusText,
+                isOwn: Number(req.user.id) === record.user_id
+            };
+        });
+        const totalPages = Math.max(1, Math.ceil(total / pageSize));
+        const isAdmin = await checkAdmin(req);
+        const nav = isAdmin ? navigationAdmin : navigation;
+        res.render('submissionlist', {
+            submissions, page, totalPages, username, problemId, total,
+            navigation: nav, user: req.user
+        });
+    } catch (err) {
+        logger.logError(`Submission index failed: ${err.message}`, err);
+        res.status(502).send('评测记录列表获取失败');
+    }
 });
 
 // 单个评测详情
 app.get('/record/:rid', requireLogin, async (req, res) => {
     const rid = req.params.rid;
-    const ridErr = validateString(rid, { minLen: 1, maxLen: 50 });
+    const ridErr = validateInt(rid, { positive: true, max: 2147483647 });
     if (ridErr) return res.status(400).send(`rid: ${ridErr}`);
-    /*
-    DB Interface, waiting for implement
-
-    Input: rid (string), user (from auth)
-    Output: submission object with results, sourceCode
-
-    Expected middleware behavior:
-    - Get submission by rid
-    - Check permission: own record or can_view_others_submissions
-    - Get all test point results
-    - Calculate totals: totalScore, totalTime, maxMemory
-    - Calculate overallCode and overallDesc based on status counts
-    - Get user info (username, role, badge, name_color)
-    - Get problem info (problem id, title)
-    - Return full data for status page rendering
-    */
-    const isAdmin = await checkAdmin(req);
-    const nav = isAdmin ? navigationAdmin : navigation;
-    res.render('status', { submission, results, totalScore, totalTime, maxMemory, overallCode, overallDesc, sourceCode, navigation: nav, user: req.user });
+    try {
+        const cookie = getRequestCookie(req);
+        const [recordData, summaryResponse] = await Promise.all([
+            getRecordFromMiddleware(cookie, rid),
+            pool.getJudge().send('V', pool.packParams([cookie, rid]))
+        ]);
+        if (recordData.error) return res.status(403).send(recordData.error);
+        if (summaryResponse.command !== 'Y') return res.status(404).send('评测记录不存在');
+        const summary = pool.parsePack(summaryResponse.data).map(part => part.toString('utf8'));
+        if (summary.length !== 8) throw new Error('Invalid record summary response');
+        const uid = Number(summary[0]);
+        const pid = summary[1];
+        const [author, problem] = await Promise.all([
+            getUserMetaById(uid),
+            getProblemFromMiddleware(pid, ['id', 'title'])
+        ]);
+        const detail = recordData.result;
+        const pending = !detail.total;
+        const results = pending ? [] : (Array.isArray(detail.detail) ? detail.detail : []).map((subtask, index) => {
+            const total = subtask.total || {};
+            return {
+                test_point_index: index + 1,
+                status: resultDescription(total.c),
+                score: Number(total.pts) || 0,
+                time_ms: Number(total.t) || 0,
+                memory_bytes: Number(total.m) || 0,
+                testcases: Array.isArray(subtask.detail) ? subtask.detail.map((testcase, testIndex) => ({
+                    test_point_index: testIndex + 1,
+                    status: resultDescription(testcase.c),
+                    time_ms: Number(testcase.t) || 0,
+                    memory_bytes: Number(testcase.m) || 0
+                })) : []
+            };
+        });
+        const overallCode = pending ? 202 : Number(detail.total.c);
+        const submission = {
+            id: rid,
+            uid,
+            username: author?.username || String(uid),
+            user_role: author?.role || 'user',
+            user_badge: author?.badge || null,
+            user_name_color: author?.name_color || null,
+            problemname: pid,
+            problemtitle: problem?.title || `题目 ${pid}`,
+            submit_time: Number(summary[7]) * 1000
+        };
+        const totalScore = pending ? 0 : Number(detail.total.pts) || 0;
+        const totalTime = pending ? 0 : Number(detail.total.t) || 0;
+        const maxMemory = pending ? 0 : Number(detail.total.m) || 0;
+        const overallDesc = pending
+            ? (detail.des || 'Pending')
+            : (detail.total.des || resultDescription(overallCode));
+        const sourceCode = recordData.sourceCode;
+        const isAdmin = await checkAdmin(req);
+        const nav = isAdmin ? navigationAdmin : navigation;
+        res.render('status', {
+            submission, results, totalScore, totalTime, maxMemory,
+            overallCode, overallDesc, sourceCode, pending,
+            navigation: nav, user: req.user
+        });
+    } catch (err) {
+        logger.logError(`Record detail failed for ${rid}: ${err.message}`, err);
+        res.status(502).send('评测记录获取失败');
+    }
 });
 
 // 比赛列表
 app.get('/contests', async (req, res) => {
-    let page = parseInt(req.query.page) || 1;
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.status(400).send(`page: ${err}`);
         page = Number(req.query.page);
     }
@@ -631,9 +795,9 @@ app.get('/profile-edit', requireLogin, async (req, res) => {
 
 // 私信页面
 app.get('/chat', requireLogin, async (req, res) => {
-    let page = parseInt(req.query.page) || 1;
+    let page = 1;
     if (req.query.page !== undefined) {
-        const err = validateInt(req.query.page, { positive: true });
+        const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
         if (err) return res.status(400).send(`page: ${err}`);
         page = Number(req.query.page);
     }

@@ -4,6 +4,7 @@ const net = require('net');
 const crypto = require('crypto');
 const config = require('./config');
 const logger = require('./logger');
+const RECORD_PAGE_SIZE = 20;
 
 // ---------- 从配置加载 ----------
 const CONFIG = {
@@ -63,6 +64,23 @@ function parsePack(data) {
         i += len;
     }
     return result;
+}
+
+function parseJudgeResult(json) {
+	try {
+		return JSON.parse(json);
+	} catch (originalError) {
+		const detailStart = json.indexOf(',"detail":[');
+		if (detailStart < 0) throw new Error(`Invalid record result JSON: ${originalError.message}`);
+		const fixedJson = json.slice(0, detailStart) + json.slice(detailStart)
+			.replace(/([,\[])"total":\{/g, '$1{"total":{');
+		if (fixedJson === json) throw new Error(`Invalid record result JSON: ${originalError.message}`);
+		try {
+			return JSON.parse(fixedJson);
+		} catch (err) {
+			throw new Error(`Invalid record result JSON: ${err.message}`);
+		}
+	}
 }
 
 function buildPacket(command, seq, data) {
@@ -785,7 +803,9 @@ module.exports = {
 	// 底层协议工具（供业务模块使用）
 	packParams,
 	parsePack,
+	parseJudgeResult,
 	buildPacket,
+	RECORD_PAGE_SIZE,
 
 	// Hack 连接池特殊方法
 	getHackConn: () => pool.getHack(),

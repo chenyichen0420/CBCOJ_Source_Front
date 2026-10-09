@@ -184,7 +184,7 @@
             <form class="search-form" method="get" action="/record/list">
                 <div class="search-group">
                     <label>👤 用户名</label>
-                    <input type="text" name="username" placeholder="输入用户名（仅显示公开代码用户）" value="<%= username %>">
+                    <input type="text" name="username" placeholder="输入用户名" value="<%= username %>">
                 </div>
                 <div class="search-group">
                     <label>📝 题目编号</label>
@@ -204,7 +204,7 @@
             </div>
             <% } else { %>
             <div class="info-note">
-                📌 显示所有公开代码用户的提交记录。你也可以通过上方表单筛选特定用户或题目的提交。
+                📌 显示评测记录索引中的提交。记录列表不公开源代码；详情页是否显示代码由中间件的隐私权限决定。
             </div>
             <% } %>
             
@@ -224,8 +224,8 @@
                     <tbody>
                         <% submissions.forEach(sub => { %>
                             <tr>
-                                <td>#<%= sub.id %></td>
-                                <td><a href="/problem/<%= sub.problem_id %>" class="submission-link"><%= sub.problem_id %></a></td>
+                                <td><a href="/record/<%= sub.id %>" class="submission-link">#<%= sub.id %></a></td>
+                                <td><a href="/problem/<%= sub.problem_id %>" class="submission-link"><%= sub.problem_title %> (<%= sub.problem_id %>)</a></td>
                                 <td>
                                     <a href="/profile/<%= sub.username %>" class="submission-link" style="color: <%= sub.name_color || (sub.role === 'admin' || sub.role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>">
                                         <img src="/api/avatar/<%= encodeURIComponent(sub.username) %>" class="avatar" alt="avatar"> <%= sub.username %>
@@ -238,14 +238,7 @@
                                     <% } %>
                                 </td>
                                 <td>
-                                    <span class="status-badge status-<%= sub.status.split('-')[0] === 'AC' ? 'AC' : 
-                                        (sub.status === 'WA' ? 'WA' : 
-                                        (sub.status === 'TLE' ? 'TLE' : 
-                                        (sub.status === 'MLE' ? 'MLE' : 
-                                        (sub.status === 'RE' ? 'RE' : 
-                                        (sub.status === 'CE' ? 'CE' : 
-                                        (sub.status === 'SE' ? 'SE' : 
-                                        (['pending','compiling','judging'].includes(sub.status) ? 'pending' : 'finished'))))))) %>">
+                                    <span class="status-badge status-<%= sub.status %>">
                                         <%= sub.statusText %>
                                     </span>
                                 </td>

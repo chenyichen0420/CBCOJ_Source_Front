@@ -234,7 +234,6 @@
             const result = await response.json();
             if (result.status !== 'Y') throw new Error(result.error || '题目保存失败');
             alert('保存成功');
-            window.location.href = '/problem/list';
         } catch (err) {
             alert('保存失败: ' + err.message);
         }
@@ -248,7 +247,7 @@
         formData.append('file', file);
         const resultNode = document.getElementById('upload-result');
         try {
-            const response = await fetch('/api/admin/problem/<%= problem.id %>/upload-data', {
+            const response = await fetch('/api/problem/<%= problem.id %>/upload-data', {
                 method: 'POST',
                 body: formData
             });

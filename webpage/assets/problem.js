@@ -54,6 +54,7 @@ document.getElementById('submit-form')?.addEventListener('submit', async functio
         return;
     }
 
+    const submitBtn = this.querySelector('button[type="submit"]');
     try {
         // 读取文件并转 Base64
         const fileBuffer = await codeFile.arrayBuffer();
@@ -69,29 +70,17 @@ document.getElementById('submit-form')?.addEventListener('submit', async functio
         submitMsg.textContent = '提交中...';
 
         // 优化 UI：禁用提交按钮以防重复提交
-        const submitBtn = this.querySelector('button[type="submit"]');
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.textContent = '提交中...';
         }
 
-        let response;
-        if (contestIdParam) {
-            // 使用比赛提交接口，cookie 仍以 query 形式传递以兼容后端登录检查
-            response = await fetch(`${BASE_URL}/api/contests/${encodeURIComponent(contestIdParam)}/submit?cookie=${cookie}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-        } else {
-            // 普通提交接口（保持原 payload 兼容性）
-            const normalPayload = Object.assign({ cookie }, payload);
-            response = await fetch(BASE_URL + '/api/submit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(normalPayload)
-            });
-        }
+        const normalPayload = Object.assign({ cookie }, payload);
+        const response = await fetch(BASE_URL + '/api/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(normalPayload)
+        });
 
         const text = await response.text();
         console.log('提交响应:', text);

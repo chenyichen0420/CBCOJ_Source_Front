@@ -169,7 +169,7 @@ router.get('/record', requireLogin, async (req, res) => {
         if (!data.total) {
             return res.json({
                 status: 'P',
-                data: { code: 202, describe: data.des || 'Judging' },
+                data: { code: Number(data.c) || 202, describe: data.des || 'Judging' },
                 uid
             });
         }

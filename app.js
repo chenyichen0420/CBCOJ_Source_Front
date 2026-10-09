@@ -335,7 +335,7 @@ async function getUserMetaById(uid) {
 
 function resultDescription(code) {
     return ({
-        200: 'Accepted', 400: 'Compilation Error', 406: 'Wrong Answer',
+        200: 'Accepted', 400: 'Compilation Error', 403: 'Rejected', 406: 'Wrong Answer',
         408: 'Time Limit Exceeded', 413: 'Memory Limit Exceeded',
         500: 'System Error', 502: 'Runtime Error', 202: 'In Queue', 206: 'Judging'
     })[Number(code)] || 'Unknown';
@@ -671,6 +671,7 @@ app.get('/record/:rid', requireLogin, async (req, res) => {
             return {
                 test_point_index: index + 1,
                 status: resultDescription(total.c),
+                description: total.des || '',
                 score: Number(total.pts) || 0,
                 time_ms: Number(total.t) || 0,
                 memory_bytes: Number(total.m) || 0,
@@ -682,7 +683,7 @@ app.get('/record/:rid', requireLogin, async (req, res) => {
                 })) : []
             };
         });
-        const overallCode = pending ? 202 : Number(detail.total.c);
+        const overallCode = pending ? (Number(detail.c) || 202) : Number(detail.total.c);
         const submission = {
             id: rid,
             uid,

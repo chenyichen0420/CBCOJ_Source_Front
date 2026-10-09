@@ -38,12 +38,12 @@
                     <h1>评测结果 - #<%= submission.id %></h1>
                     <div id="record-content">
                         <h3>评测结果</h3>
-                        <p style="color: <%= overallCode === 200 ? 'green' : (overallCode === 408 ? 'lightblue' : (overallCode === 406 ? 'red' : 'white')) %>"><%= overallDesc %></p>
+                        <p style="color: <%= overallCode === 200 ? 'green' : ([202, 206, 408, 413].includes(overallCode) ? 'lightblue' : (overallCode === 403 ? 'yellow' : ([400, 406, 500].includes(overallCode) ? 'red' : (overallCode === 502 ? 'purple' : 'white')))) %>"><%= overallDesc %></p>
                         <p>时间: <%= totalTime %>ms</p>
                         <p>内存: <%= (maxMemory / 1024 / 1024).toFixed(2) %>MB</p>
                         <p>得分: <%= totalScore %></p>
                         <% if (pending) { %>
-                            <p>评测任务已提交，结果尚未生成，请稍后刷新此页面。</p>
+                            <p>评测尚未完成，当前状态：<%= overallCode === 202 ? 'In Queue' : 'Judging' %></p>
                         <% } else { %>
                             <h4>评测详情</h4>
                             <details>
@@ -53,7 +53,8 @@
                                         : r.status === 'Time Limit Exceeded' || r.status === 'Memory Limit Exceeded' ? 'lightblue'
                                             : r.status === 'Runtime Error' ? 'purple'
                                                 : r.status === 'Compilation Error' ? 'orange'
-                                                    : r.status === 'Wrong Answer' ? 'red' : '#fff';
+                                                    : r.status === 'Wrong Answer' ? 'red'
+                                                        : r.status === 'Rejected' ? 'yellow' : '#fff';
                                 %>
                                 <div class="testcase-card" style="border-left-color: <%= color %>;">
                                     <div class="testcase-card-header">
@@ -64,6 +65,9 @@
                                         <div class="testcase-detail-item"><strong>时间</strong><br><%= r.time_ms %> ms</div>
                                         <div class="testcase-detail-item"><strong>内存</strong><br><%= (r.memory_bytes / 1024 / 1024).toFixed(2) %> MB</div>
                                     </div>
+                                    <% if (r.description) { %>
+                                        <div class="testcase-description"><strong>说明</strong><br><%= r.description %></div>
+                                    <% } %>
                                     <% if (r.testcases.length) { %>
                                         <details>
                                             <summary>测试点明细</summary>

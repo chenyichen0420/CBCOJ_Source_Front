@@ -145,20 +145,23 @@
         <% } %>
     </div>
 </main>
+<script src="/assets/markdown-renderer.js"></script>
 <script>
-    const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'hint'];
+const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'hint'];
 
     function renderMarkdownPreview(field) {
         const textarea = document.getElementById(`field-${field}`);
         const preview = document.querySelector(`[data-preview-for="${field}"]`);
-        const html = marked.parse(textarea.value || '');
-        preview.innerHTML = DOMPurify.sanitize(html);
+        preview.innerHTML = renderMarkdownWithMath(textarea.value || '');
         if (typeof renderMathInElement !== 'undefined') {
             renderMathInElement(preview, {
                 delimiters: [
                     { left: '$$', right: '$$', display: true },
-                    { left: '$', right: '$', display: false }
-                ]
+                    { left: '$', right: '$', display: false },
+                    { left: '\\(', right: '\\)', display: false },
+                    { left: '\\[', right: '\\]', display: true }
+                ],
+                throwOnError: false
             });
         }
     }

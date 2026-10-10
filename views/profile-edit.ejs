@@ -55,6 +55,7 @@
     </main>
 
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script src="/assets/markdown-renderer.js"></script>
     <script>
         // 加载已有内容
         (async () => {
@@ -69,8 +70,7 @@
             const md = document.getElementById('markdown').value;
             const previewDiv = document.getElementById('preview');
             const contentDiv = document.getElementById('previewContent');
-            const html = marked.parse(md || '');
-            contentDiv.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+            contentDiv.innerHTML = renderMarkdownWithMath(md || '');
             if (typeof renderMathInElement !== 'undefined') {
                 renderMathInElement(contentDiv, {
                     delimiters: [

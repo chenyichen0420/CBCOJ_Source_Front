@@ -71,6 +71,7 @@
     </main>
 
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script src="/assets/markdown-renderer.js"></script>
     <script>
         let currentTarget = null;
         async function loadConversations() {
@@ -105,8 +106,7 @@
                     row.className = 'message-row ' + (isMe ? 'msg-right' : 'msg-left');
                     const bubble = document.createElement('div');
                     bubble.className = 'bubble ' + (isMe ? 'me' : '');
-                    const html = marked.parse(m.content || '');
-                    bubble.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+                    bubble.innerHTML = renderMarkdownWithMath(m.content || '');
                     row.appendChild(isMe ? bubble : (() => { const img = document.createElement('img'); img.src = '/api/avatar/' + encodeURIComponent(m.from); img.className='avatar'; const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.appendChild(img); wrap.appendChild(bubble); return wrap; })());
                     msgs.appendChild(row);
                 });

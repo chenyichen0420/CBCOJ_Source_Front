@@ -175,6 +175,10 @@ nav {
   padding: 24px;
 }
 
+#sample pre.card {
+  border-radius: var(--radius-sm);
+}
+
 #description {
   margin-top: 16px;
   line-height: 1.7;
@@ -264,7 +268,7 @@ nav {
 .problem-table th,
 .contest-table th {
   background: var(--bg-tertiary);
-  padding: 12px;
+  padding: 8px 10px;
   font-weight: 600;
   border-bottom: 2px solid var(--border-medium);
 }
@@ -272,7 +276,7 @@ nav {
 .permission-table td,
 .problem-table td,
 .contest-table td {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border-light);
 }
 

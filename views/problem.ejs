@@ -46,9 +46,9 @@
                         <h3>样例</h3>
                         <% problem.sample.forEach((sample, idx) => { %>
                             <h4>样例输入 <%= idx+1 %></h4>
-                            <code class="card" style="margin:5px 5px 10px 5px; padding:5px;"><%= sample.input %></code>
+                            <pre class="card" style="margin:5px 5px 10px 5px; padding:5px; white-space:pre-wrap; overflow-x:auto;"><%= sample.input %></pre>
                             <h4>样例输出 <%= idx+1 %></h4>
-                            <code class="card" style="margin:5px 5px 10px 5px; padding:5px;"><%= sample.output %></code>
+                            <pre class="card" style="margin:5px 5px 10px 5px; padding:5px; white-space:pre-wrap; overflow-x:auto;"><%= sample.output %></pre>
                         <% }) %>
                     </div>
                     <div id="hint"><h3>提示</h3><div><script type="text/plain" class="raw-markdown"><%= problem.hint || '' %></script></div></div>

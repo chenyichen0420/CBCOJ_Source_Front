@@ -1,23 +1,53 @@
+window.renderMarkdownWithMath = function(markdown) {
+    const source = String(markdown || '');
+    if (typeof marked === 'undefined') {
+        return '<pre>' + escapeHtml(source) + '</pre>';
+    }
+
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
+    });
+
+    const formulas = [];
+    const placeholderPrefix = 'CBCMATHPLACEHOLDER';
+    let prefix = placeholderPrefix;
+    while (source.includes(prefix)) prefix += 'X';
+
+    let protectedMarkdown = source.replace(
+        /\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g,
+        formula => {
+            const placeholder = `${prefix}${formulas.length}TOKEN`;
+            formulas.push(formula);
+            return placeholder;
+        }
+    );
+    protectedMarkdown = protectedMarkdown.replace(/\$([^\n$]*?)\$/g, formula => {
+        const placeholder = `${prefix}${formulas.length}TOKEN`;
+        formulas.push(formula);
+        return placeholder;
+    });
+
+    let html = marked.parse(protectedMarkdown);
+    if (typeof DOMPurify !== 'undefined') html = DOMPurify.sanitize(html);
+
+    formulas.forEach((formula, index) => {
+        const placeholder = `${prefix}${index}TOKEN`;
+        html = html.replaceAll(placeholder, () => escapeMathFormula(formula));
+    });
+    return html;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     try {
         const mdNodes = document.querySelectorAll('script[type="text/plain"].raw-markdown');
-        if (!mdNodes || mdNodes.length === 0) return;
         mdNodes.forEach(node => {
-            const md = node.textContent || '';
-            let html = md;
-            if (typeof marked !== 'undefined') {
-                try {
-                    html = marked.parse(md);
-                } catch (e) {
-                    console.warn('marked parse failed, falling back to text', e);
-                    html = '<pre>' + escapeHtml(md) + '</pre>';
-                }
-            }
-            const clean = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
             const container = document.createElement('div');
-            container.innerHTML = clean;
+            container.innerHTML = window.renderMarkdownWithMath(node.textContent || '');
             node.parentNode.replaceChild(container, node);
-            // render KaTeX in the replaced container
+
             if (typeof renderMathInElement !== 'undefined') {
                 try {
                     renderMathInElement(container, {
@@ -37,13 +67,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
         console.error('markdown-renderer error', e);
     }
-
-    function escapeHtml(str) {
-        return String(str || '').replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
 });
+
+function escapeHtml(str) {
+    return String(str || '').replace(/[&<>]/g, character => {
+        if (character === '&') return '&amp;';
+        if (character === '<') return '&lt;';
+        return '&gt;';
+    });
+}
+
+function escapeMathFormula(formula) {
+    return formula.replace(/[<>]/g, character => character === '<' ? '&lt;' : '&gt;');
+}

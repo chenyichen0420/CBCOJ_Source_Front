@@ -6,7 +6,7 @@ table {
   border-collapse: collapse;
   font-size: 0.9rem;
   background-color: transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   margin: 1.5rem 0;
   box-shadow: var(--shadow-sm);
@@ -18,15 +18,14 @@ thead tr {
 }
 
 th {
-  padding: 14px 18px;
+  padding: 8px 12px;
   font-weight: 600;
-  text-align: left;
   letter-spacing: 0.3px;
   font-size: 0.95rem;
 }
 
 td {
-  padding: 12px 18px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-light);
   color: var(--text-primary);
 }

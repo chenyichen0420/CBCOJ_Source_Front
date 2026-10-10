@@ -62,12 +62,12 @@
         <% /* 管理员的精选选项已改为复选框 */ %>
     </div>
 </main>
+<script src="/assets/markdown-renderer.js"></script>
 <script>
     function renderPreview(){
         const md = document.getElementById('description').value || '';
-        const html = marked.parse(md);
-        document.getElementById('preview').innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
-        if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.getElementById('preview'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});
+        document.getElementById('preview').innerHTML = renderMarkdownWithMath(md);
+        if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.getElementById('preview'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false});
     }
     document.getElementById('description').addEventListener('input', renderPreview);
     document.getElementById('background').addEventListener('input', renderPreview);

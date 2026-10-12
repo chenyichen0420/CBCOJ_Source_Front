@@ -555,7 +555,7 @@ app.get('/record/list', requireLogin, async (req, res) => {
         const uid = targetUser ? targetUser.uid : (problemId ? -1 : Number(req.user.id));
         const pid = problemId ? Number(problemId) : -1;
         const response = await pool.getJudge().send('I', pool.packParams([
-            getRequestCookie(req), String(uid), String(pid), String(page - 1), String(pageSize)
+            getRequestCookie(req), String(uid), String(pid), String(page), String(pageSize)
         ]));
 
         // console.log(response);

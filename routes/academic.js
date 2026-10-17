@@ -216,32 +216,6 @@ function getCookie(req) {
     return cookie;
 }
 
-// 用户新建题目（默认不公开 opened=0，selected=0），入口在题目列表
-router.post('/problem/new', requirePermission('can_manage_problems'), upload.none(), async (req, res) => {
-    const user = req.user;
-    const { title, background, description, inputfmt, outputfmt, hint, timelm, memlm, datacount, sample, selected } = req.body;
-    const titleErr = validateString(title, { minLen: 1, maxLen: 200 });
-    if (titleErr) return res.json({ status: 'N', error: `title: ${titleErr}` });
-    const descErr = validateString(description, { minLen: 1 });
-    if (descErr) return res.json({ status: 'N', error: `description: ${descErr}` });
-    /*
-    DB Interface, waiting for implement
-
-    Input: title (string), background (string), description (string), inputfmt (string),
-            outputfmt (string), hint (string), timelm (int), memlm (int),
-            datacount (int), sample (JSON array), selected (int 0/1), user (from auth)
-    Output: { status: 'Y', id: string } | { status: 'N', error: string }
-
-    Expected middleware behavior:
-    - Auto-generate next available numeric id
-    - Create new problem with provided fields
-    - Set author to current user's username
-    - Set opened=0 (not public by default)
-    - Set selected=0 (not featured by default)
-    - Return the assigned id
-    */
-});
-
 // 作者或管理员编辑题目
 router.post('/problem/edit', requirePermission('can_manage_problems'), upload.none(), async (req, res) => {
     const user = req.user;

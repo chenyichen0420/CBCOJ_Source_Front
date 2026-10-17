@@ -229,7 +229,7 @@ function decodeStoredText(value) {
     const text = String(value);
     try {
         const decoded = Buffer.from(text, 'base64').toString('utf8');
-        if (Buffer.from(decoded, 'utf8').toString('base64') === text) return decoded;
+        if (Buffer.from(decoded, 'utf8').toString('base64') === text) return decoded === '\0' ? '' : decoded;
     } catch (_) {
         // 保留旧版本 basic.txt 中的明文值
     }
@@ -965,7 +965,7 @@ ensureDirs().then(() => {
 |------|---------|-------------------|
 | `/` | `index.ejs` | 中间件统计 API |
 | `/problem/list` | `problemlist.ejs` | 中间件题目列表 |
-| `/problem/new` | `problem-new.ejs` | 无数据依赖 |
+| `/problem/new` | `problem-new.ejs` | 通过编号申请和题目更新接口创建 |
 | `/problem/me` | `problemlist.ejs` | 中间件题目列表（按作者） |
 | `/problem/:id` | `problem.ejs` | 中间件题目详情 |
 | `/problem/edit/:id` | `problem-edit.ejs` | 中间件题目详情 |

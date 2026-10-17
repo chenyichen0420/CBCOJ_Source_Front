@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>编辑题目 - CBCOJ</title>
+    <title><%= title %> - CBCOJ</title>
     <link rel="stylesheet" href="/assets/base.css">
     <link rel="stylesheet" href="/assets/components.css">
     <link rel="stylesheet" href="/assets/layout.css">
@@ -12,10 +12,29 @@
     <script src="/assets/katex.min.js"></script>
     <script src="/assets/auto-render.min.js"></script>
     <style>
-        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .editor-pane { background: var(--bg-secondary); padding: 12px; border-radius:8px; }
-        .sample-list { margin-top:8px; }
-        .sample-item { display:flex; gap:8px; margin-bottom:6px; }
+        .problem-editor-container { max-width: 1440px; }
+        #problem-form { width: 100%; }
+        .problem-form-section { margin-top: 16px; }
+        .problem-form-section > label { display: block; margin-bottom: 6px; font-weight: 600; }
+        .problem-form-section input,
+        .problem-form-section textarea { width: 100%; }
+        .problem-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .markdown-preview {
+            display: none;
+            margin-top: 8px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            overflow-wrap: anywhere;
+        }
+        .markdown-preview.active { display: block; }
+        .sample-item { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+        .problem-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+        @media (max-width: 700px) {
+            .problem-limits { grid-template-columns: 1fr; gap: 0; }
+            .sample-item { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -23,92 +42,164 @@
     <div class="nav-left"><%- navigation %></div>
 </nav>
 <main class="page">
-    <div class="container">
+    <div class="container problem-editor-container">
         <h1><%- title %></h1>
+        <p>提交时将自动申请题目编号，创建的题目默认不公开。</p>
         <form id="problem-form">
-            <div style="display:flex;gap:12px;align-items:center;">
-                <input name="title" placeholder="题目标题" required style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);">
+            <div class="problem-form-section">
+                <label for="problem-title">题目名称</label>
+                <input id="problem-title" name="title" required maxlength="200">
             </div>
-            <div class="editor-grid" style="margin-top:12px;">
-                <div class="editor-pane">
-                    <label>题目描述 (Markdown)</label>
-                    <textarea name="description" id="description" rows="10" style="width:100%;"></textarea>
-                    <label style="margin-top:8px;display:block;">背景</label>
-                    <textarea name="background" id="background" rows="4" style="width:100%;"></textarea>
-                    <label style="margin-top:8px;display:block;">输入格式</label>
-                    <textarea name="inputfmt" rows="2" style="width:100%;"></textarea>
-                    <label style="margin-top:8px;display:block;">输出格式</label>
-                    <textarea name="outputfmt" rows="2" style="width:100%;"></textarea>
+
+            <div class="problem-limits">
+                <div class="problem-form-section">
+                    <label for="time-limit">时间限制 (ms)</label>
+                    <input id="time-limit" type="number" name="timelimit" min="1" required value="1000">
                 </div>
-                <div class="editor-pane">
-                    <label>实时预览</label>
-                    <div id="preview" style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;min-height:300px;overflow:auto;"></div>
-                    <label style="margin-top:8px;display:block;">样例</label>
-                    <div id="sample-area">
-                        <div class="sample-item"><input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" id="add-sample">添加</button></div>
-                    </div>
+                <div class="problem-form-section">
+                    <label for="memory-limit">空间限制 (KB)</label>
+                    <input id="memory-limit" type="number" name="memorylimit" min="1" required value="262144">
                 </div>
             </div>
-            <div style="margin-top:12px;display:flex;gap:8px;">
-                <button type="submit" style="background:var(--primary);color:#fff;padding:8px 12px;border-radius:6px;border:none;">提交题目（默认不公开）</button>
-                <a href="/problem/list">取消</a>
-            </div>
-            <% if (admin) { %>
-            <div style="margin-top:8px;">
-                <label><input type="checkbox" name="selected"> 精选 (管理员可选)</label>
+
+            <% for (const field of [
+                { name: 'background', label: '题目背景', rows: 5 },
+                { name: 'description', label: '题目描述', rows: 10 },
+                { name: 'inputfmt', label: '输入格式', rows: 5 },
+                { name: 'outputfmt', label: '输出格式', rows: 5 }
+            ]) { %>
+            <div class="problem-form-section markdown-field">
+                <label for="field-<%= field.name %>"><%= field.label %></label>
+                <textarea id="field-<%= field.name %>" name="<%= field.name %>" rows="<%= field.rows %>" <%= field.name === 'description' ? 'required' : '' %>></textarea>
+                <div class="markdown-preview" data-preview-for="<%= field.name %>" aria-live="polite"></div>
             </div>
             <% } %>
+
+            <div class="problem-form-section">
+                <label>样例</label>
+                <div id="sample-area">
+                    <div class="sample-item">
+                        <textarea name="sample_input" rows="3" placeholder="样例输入"></textarea>
+                        <textarea name="sample_output" rows="3" placeholder="样例输出"></textarea>
+                        <button type="button" class="remove-sample">移除</button>
+                    </div>
+                </div>
+                <button type="button" id="add-sample">添加样例</button>
+            </div>
+
+            <div class="problem-form-section markdown-field">
+                <label for="field-hint">说明提示</label>
+                <textarea id="field-hint" name="hint" rows="5"></textarea>
+                <div class="markdown-preview" data-preview-for="hint" aria-live="polite"></div>
+            </div>
+
+            <div class="problem-form-section">
+                <label for="difficulty">难度</label>
+                <input id="difficulty" name="difficulty">
+            </div>
+
+            <div class="problem-actions">
+                <button type="submit">创建题目</button>
+                <a href="/problem/list">取消</a>
+            </div>
         </form>
-        <% /* 管理员的精选选项已改为复选框 */ %>
     </div>
 </main>
 <script src="/assets/markdown-renderer.js"></script>
 <script>
-    function renderPreview(){
-        const md = document.getElementById('description').value || '';
-        document.getElementById('preview').innerHTML = renderMarkdownWithMath(md);
-        if (typeof renderMathInElement !== 'undefined') renderMathInElement(document.getElementById('preview'), {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}],throwOnError:false});
-    }
-    document.getElementById('description').addEventListener('input', renderPreview);
-    document.getElementById('background').addEventListener('input', renderPreview);
-    renderPreview();
+    const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'hint'];
 
-    document.getElementById('add-sample').addEventListener('click', ()=>{
-        const container = document.getElementById('sample-area');
-        const div = document.createElement('div'); div.className='sample-item';
-        div.innerHTML = '<input name="sample_input" placeholder="输入" style="flex:1;padding:6px;"><input name="sample_output" placeholder="输出" style="flex:1;padding:6px;"><button type="button" class="remove-sample">移除</button>';
-        container.appendChild(div);
-        div.querySelector('.remove-sample').addEventListener('click', ()=>div.remove());
+    function renderMarkdownPreview(field) {
+        const textarea = document.getElementById(`field-${field}`);
+        const preview = document.querySelector(`[data-preview-for="${field}"]`);
+        preview.innerHTML = renderMarkdownWithMath(textarea.value || '');
+        if (typeof renderMathInElement !== 'undefined') {
+            renderMathInElement(preview, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false },
+                    { left: '\\(', right: '\\)', display: false },
+                    { left: '\\[', right: '\\]', display: true }
+                ],
+                throwOnError: false
+            });
+        }
+    }
+
+    for (const field of markdownFields) {
+        const textarea = document.getElementById(`field-${field}`);
+        const preview = document.querySelector(`[data-preview-for="${field}"]`);
+        textarea.addEventListener('focus', () => {
+            document.querySelectorAll('.markdown-preview.active').forEach(item => item.classList.remove('active'));
+            preview.classList.add('active');
+            renderMarkdownPreview(field);
+        });
+        textarea.addEventListener('blur', () => preview.classList.remove('active'));
+        textarea.addEventListener('input', () => renderMarkdownPreview(field));
+    }
+
+    function addSample(input = '', output = '') {
+        const item = document.createElement('div');
+        item.className = 'sample-item';
+        const inputField = document.createElement('textarea');
+        inputField.name = 'sample_input';
+        inputField.rows = 3;
+        inputField.placeholder = '样例输入';
+        inputField.value = input;
+        const outputField = document.createElement('textarea');
+        outputField.name = 'sample_output';
+        outputField.rows = 3;
+        outputField.placeholder = '样例输出';
+        outputField.value = output;
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.textContent = '移除';
+        removeButton.addEventListener('click', () => item.remove());
+        item.append(inputField, outputField, removeButton);
+        document.getElementById('sample-area').appendChild(item);
+    }
+
+    document.getElementById('add-sample').addEventListener('click', () => addSample());
+    document.querySelectorAll('#sample-area .remove-sample').forEach(button => {
+        button.addEventListener('click', () => button.closest('.sample-item').remove());
     });
 
-    document.getElementById('problem-form').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        const form = e.target;
-        const data = new FormData(form);
-        // gather samples
-        const samples = [];
-        document.querySelectorAll('#sample-area .sample-item').forEach(si=>{
-            const inp = si.querySelector('input[name="sample_input"]')?.value || '';
-            const out = si.querySelector('input[name="sample_output"]')?.value || '';
-            if (inp || out) samples.push({input: inp, output: out});
-        });
+    document.getElementById('problem-form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submitButton = form.querySelector('[type="submit"]');
+        const samples = Array.from(document.querySelectorAll('#sample-area .sample-item'))
+            .map(item => ({
+                input: item.querySelector('[name="sample_input"]').value,
+                output: item.querySelector('[name="sample_output"]').value
+            }))
+            .filter(sample => sample.input || sample.output);
         const payload = {
-            title: form.title.value,
-            description: form.description.value,
-            background: form.background.value,
-            inputfmt: form.inputfmt.value,
-            outputfmt: form.outputfmt.value,
+            title: form.elements.title.value,
+            timelimit: Number(form.elements.timelimit.value),
+            memorylimit: Number(form.elements.memorylimit.value),
+            difficulty: form.elements.difficulty.value,
+            background: form.elements.background.value,
+            description: form.elements.description.value,
+            inputfmt: form.elements.inputfmt.value,
+            outputfmt: form.elements.outputfmt.value,
+            hint: form.elements.hint.value,
             sample: JSON.stringify(samples)
         };
-        const selectedEl = document.querySelector('input[name="selected"]');
-        if (selectedEl) payload.selected = selectedEl.checked ? 1 : 0;
-        const res = await fetch('/problem/new', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-        const j = await res.json();
-        if (j.status === 'Y') {
-            alert('创建成功，默认未公开，请等待管理员精选或在个人设置中管理');
-            window.location.href = '/problem/list';
-        } else {
-            alert('创建失败: ' + (j.error||'未知错误'));
+
+        try {
+            submitButton.disabled = true;
+            const response = await fetch('/api/problem/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status !== 'Y') throw new Error(result.error || '题目创建失败');
+            window.location.href = `/problem/edit/${encodeURIComponent(result.id)}`;
+        } catch (err) {
+            alert('创建失败: ' + err.message);
+            submitButton.disabled = false;
         }
     });
 </script>

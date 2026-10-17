@@ -238,7 +238,9 @@ async function uploadProblemData(req, res) {
 }
 
 function encodeStoredText(value) {
-    return Buffer.from(String(value ?? ''), 'utf8').toString('base64');
+    const text = String(value ?? '');
+    // Keep empty basic.txt fields as non-whitespace tokens for the middleware parser.
+    return Buffer.from(text || '\0', 'utf8').toString('base64');
 }
 
 function decodeStoredText(value) {
@@ -246,7 +248,7 @@ function decodeStoredText(value) {
     const text = String(value);
     try {
         const decoded = Buffer.from(text, 'base64').toString('utf8');
-        if (Buffer.from(decoded, 'utf8').toString('base64') === text) return decoded;
+        if (Buffer.from(decoded, 'utf8').toString('base64') === text) return decoded === '\0' ? '' : decoded;
     } catch (_) {
         // 兼容旧版本 basic.txt 中的明文值
     }
@@ -327,7 +329,7 @@ async function listProblems(offset, limit) {
 
 async function updateProblem(req, id) {
     const problem = await readProblem(id);
-    // if (!problem) return { error: '题目不存在', status: 404 };
+    if (!problem) return { error: '题目不存在', status: 404 };
 
     const body = req.body || {};
     const statement = { ...problem._statement };
@@ -429,12 +431,63 @@ router.put('/problem/edit/:id', requirePermission('can_manage_problems'), async 
     }
 });
 
+async function createProblem(req, res) {
+    const titleErr = validateString(req.body?.title, { minLen: 1, maxLen: 200 });
+    if (titleErr) return res.status(400).json({ status: 'N', error: `title: ${titleErr}` });
+    const descriptionErr = validateString(req.body?.description, { minLen: 1 });
+    if (descriptionErr) return res.status(400).json({ status: 'N', error: `description: ${descriptionErr}` });
+
+    const cookie = getCookie(req);
+    const cookieErr = validateString(cookie, { minLen: 1, maxLen: 200 });
+    if (cookieErr) return res.status(401).json({ status: 'N', error: '登录状态无效，请重新登录' });
+
+    let id;
+    try {
+        const allocation = await pool.getJudge().send('N', pool.packParams([cookie]));
+        if (allocation.command !== 'Y') {
+            const parts = pool.parsePack(allocation.data);
+            return res.status(400).json({
+                status: 'N',
+                error: parts[0]?.toString('utf8') || '题目编号申请失败'
+            });
+        }
+
+        const parts = pool.parsePack(allocation.data);
+        id = parts.length === 1 ? parts[0].toString('utf8') : '';
+        const idErr = validateInt(id, { positive: true });
+        if (idErr) throw new Error('题目编号申请接口返回无效编号');
+
+        const result = await updateProblem({
+            body: { ...(req.body || {}), opened: 0 },
+            headers: req.headers,
+            query: req.query
+        }, id);
+        if (!result.ok) {
+            return res.status(result.status).json({
+                status: 'N',
+                error: `题目编号 ${id} 已申请，但保存失败：${result.error}`,
+                id
+            });
+        }
+        return res.json({ status: 'Y', id });
+    } catch (err) {
+        logger.logError(`Problem creation failed for user ${req.user?.id}: ${err.message}`, err);
+        return res.status(502).json({
+            status: 'N',
+            error: id ? `题目编号 ${id} 已申请，但保存过程中发生错误` : '题目编号申请失败，请稍后重试',
+            ...(id ? { id } : {})
+        });
+    }
+}
+
+router.post('/problem/new', requirePermission('can_manage_problems'), createProblem);
+router.post('/problem', requirePermission('can_manage_problems'), createProblem);
+
 router.post('/problem/:id/upload-data', requirePermission('can_manage_problems'), uploadProblemData);
 
-// 暂不支持：当前 JudgeSession 没有新建、删除、精选或检查器接口。
-// 迁移目标：为这些操作增加 middleware 协议后，再分别实现以下 admin.js 原始接口。
+// 暂不支持：当前 JudgeSession 没有删除、精选或检查器接口。
+// 新建题目通过 JudgeSession 的编号申请和题目更新接口完成。
 const unsupportedProblemRoutes = [
-    ['post', '/problem'],
     ['delete', '/problem/:id'],
     ['post', '/problem/:id/upload-checker'],
     ['put', '/problem/:id/select']

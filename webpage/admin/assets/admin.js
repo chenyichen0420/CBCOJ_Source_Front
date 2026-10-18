@@ -135,8 +135,7 @@ async function checkAdmin() {
 
         const hasAnyPerm = currentUserPerms.can_manage_users ||
                            currentUserPerms.can_manage_problems ||
-                           currentUserPerms.can_manage_contests ||
-                           currentUserPerms.can_manage_disk;
+                           currentUserPerms.can_manage_contests;
         if (!hasAnyPerm) {
             document.getElementById('admin-content').innerHTML = '<p class="error">您没有任何管理权限</p>';
             return false;
@@ -200,24 +199,8 @@ function renderAdminUI() {
             </div>
         `;
     }
-    if (currentUserPerms.can_manage_disk) {
-        const activeClass = (!currentUserPerms.can_manage_users && !currentUserPerms.can_manage_problems && !currentUserPerms.can_manage_contests) ? 'active' : '';
-        tabsHtml += `<button class="tab-btn ${activeClass}" data-tab="disk">网盘管理</button>`;
-        panesHtml += `
-            <div id="disk-pane" class="tab-pane ${activeClass}">
-                <h2>网盘文件管理</h2>
-                <div class="filter-row">
-                    <input type="text" id="diskUsernameFilter" placeholder="按用户名筛选" />
-                    <button id="diskFilterBtn" class="btn-sm">搜索</button>
-                </div>
-                <div id="disk-loading">加载中...</div>
-                <div id="disk-table-container"></div>
-                <div id="disk-pagination" class="pagination"></div>
-            </div>
-        `;
-    }
     if (currentUser && currentUser.role === 'superadmin') {
-        const activeClass = (!currentUserPerms.can_manage_users && !currentUserPerms.can_manage_problems && !currentUserPerms.can_manage_contests && !currentUserPerms.can_manage_disk) ? 'active' : '';
+        const activeClass = (!currentUserPerms.can_manage_users && !currentUserPerms.can_manage_problems && !currentUserPerms.can_manage_contests) ? 'active' : '';
         tabsHtml += `<button class="tab-btn ${activeClass}" data-tab="bans">封禁管理</button>`;
         tabsHtml += `<button class="tab-btn ${activeClass}" data-tab="logs">系统日志</button>`;
         panesHtml += `
@@ -266,10 +249,6 @@ function renderAdminUI() {
     if (currentUserPerms.can_manage_users) loadUsers();
     if (currentUserPerms.can_manage_problems) loadProblems(1);
     if (currentUserPerms.can_manage_contests) loadContests(1);
-    if (currentUserPerms.can_manage_disk) {
-        diskUsernameFilter = '';
-        loadDiskFiles(1);
-    }
     if (currentUser && currentUser.role === 'superadmin') {
         // 绑定封禁相关按钮
         document.getElementById('banip-btn').addEventListener('click', async () => {
@@ -634,7 +613,7 @@ function renderProblemsTable(problems, totalPages) {
                 <td>${p.memlm}</td>
                 <td class="problem-actions">
                     <button class="btn-sm btn-primary edit-problem" data-id="${p.id}">编辑</button>
-                    <button class="btn-sm btn-danger delete-problem" data-id="${p.id}">删除</button>
+                    <!-- <button class="btn-sm btn-danger delete-problem" data-id="${p.id}">删除</button> -->
                 </td>
             </tr>
         `;
@@ -654,165 +633,14 @@ function renderProblemsTable(problems, totalPages) {
 
     // 编辑/删除按钮
     document.querySelectorAll('.edit-problem').forEach(btn => {
-        btn.addEventListener('click', () => editProblem(btn.dataset.id));
+        btn.addEventListener('click', () => {
+            window.location.href = `/problem/edit/${encodeURIComponent(btn.dataset.id)}`;
+        });
     });
     document.querySelectorAll('.delete-problem').forEach(btn => {
         btn.addEventListener('click', () => deleteProblem(btn.dataset.id));
     });
     document.getElementById('add-problem-btn').addEventListener('click', showAddProblemModal);
-}
-
-// 题目模态框（新增/编辑）
-function showProblemModal(problem = null) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    let formHtml = `
-        <div class="modal-content">
-            <h3>${problem ? '编辑题目' : '添加题目'}</h3>
-            <form id="problem-form">
-                <div class="form-group"><label>标题</label><input type="text" name="title" value="${escapeAttr(problem?.title || '')}" required></div>
-                <div class="form-row">
-                    <div class="form-group"><label>时间限制(ms)</label><input type="number" name="timelimit" min="1" value="${problem?.timelm || 1000}"></div>
-                    <div class="form-group"><label>空间限制(KB)</label><input type="number" name="memorylimit" min="1" value="${problem?.memlm || 262144}"></div>
-                </div>
-                <div class="form-group"><label>背景</label><textarea name="background">${escapeHtml(problem?.background || '')}</textarea></div>
-                <div class="form-group"><label>题目描述</label><textarea name="description" required>${escapeHtml(problem?.description || '')}</textarea></div>
-                <div class="form-group"><label>输入格式</label><textarea name="inputfmt">${escapeHtml(problem?.inputfmt || '')}</textarea></div>
-                <div class="form-group"><label>输出格式</label><textarea name="outputfmt">${escapeHtml(problem?.outputfmt || '')}</textarea></div>
-                <div class="form-row">
-                    <div class="form-group"><label>样例(JSON数组)</label><input type="text" name="sample" value='${escapeAttr(problem?.sample ? JSON.stringify(problem.sample) : '[]')}'></div>
-                </div>
-                <div class="form-group"><label>说明提示</label><textarea name="hint">${escapeHtml(problem?.hint || '')}</textarea></div>
-                <div class="form-group"><label>难度</label><input type="text" name="difficulty" value="${escapeAttr(problem?.difficulty || '')}"></div>
-                ${problem ? `<div>最后更新: ${escapeHtml(problem.time || '—')}；更新者 UID: ${escapeHtml(problem.author || '—')}</div>` : ''}
-                ${problem ? `<div class="form-group"><label><input type="checkbox" name="opened" ${problem.opened ? 'checked' : ''}> 公开题目</label></div>` : ''}
-                ${problem ? `<div class="form-group"><label>ID</label><span>${escapeHtml(problem.id || '')}</span></div>` : ''}
-            </form>
-    `;
-
-    if (problem && problem.id) {
-        formHtml += `
-            <div class="upload-section">
-                <h4>📦 测试数据包上传 (.zip)</h4>
-                <div class="upload-row">
-                    <input type="file" id="dataFileInput" accept=".zip" />
-                    <button class="btn-sm btn-primary" id="uploadDataBtn" data-problem-id="${problem.id}">上传数据包</button>
-                </div>
-                <div class="path-display" id="dataPathDisplay">测试数据上传状态</div>
-            </div>
-        `;
-    } else {
-        formHtml += `<div class="upload-section" style="color: var(--text-secondary);">提示: 题目创建成功后，可在编辑界面上传测试数据。</div>`;
-    }
-
-    formHtml += `
-            <div class="modal-actions">
-                <button class="btn" id="cancel-modal">取消</button>
-                <button class="btn btn-primary" id="save-problem">保存</button>
-            </div>
-        </div>
-    `;
-
-    modal.innerHTML = formHtml;
-    document.body.appendChild(modal);
-
-    const closeModal = () => document.body.removeChild(modal);
-    document.getElementById('cancel-modal').addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-
-    // 保存题目
-    document.getElementById('save-problem').addEventListener('click', async () => {
-        const form = document.getElementById('problem-form');
-        const formData = new FormData(form);
-        const data = {};
-        formData.forEach((value, key) => {
-            if (key === 'sample') {
-                try { data[key] = JSON.parse(value); } catch(e) { data[key] = []; }
-            } else if (key === 'timelimit' || key === 'memorylimit') {
-                data[key] = parseInt(value) || 0;
-            } else if (key === 'opened') {
-                data[key] = true;
-            } else {
-                data[key] = value;
-            }
-        });
-        if (problem) data.opened = form.elements.opened.checked ? 1 : 0;
-
-        const cookie = getcookie();
-        const url = problem ?
-            `${BASE_URL}/api/problem/edit/${problem.id}?cookie=${cookie}` :
-            `${BASE_URL}/api/problem?cookie=${cookie}`;
-        const method = problem ? 'PUT' : 'POST';
-
-        try {
-            const resp = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await resp.json();
-            if (result.status === 'Y') {
-                await modalAlert('保存成功');
-                closeModal();
-                loadProblems(currentProblemPage);
-            } else {
-                await modalAlert('保存失败: ' + result.error);
-            }
-            } catch (err) {
-            await modalAlert('请求失败: ' + err.message);
-        }
-    });
-
-    if (problem && problem.id) {
-        // 上传数据包
-        const uploadDataBtn = document.getElementById('uploadDataBtn');
-        const dataFileInput = document.getElementById('dataFileInput');
-        const dataPathDisplay = document.getElementById('dataPathDisplay');
-
-        uploadDataBtn.addEventListener('click', async () => {
-            const file = dataFileInput.files[0];
-            if (!file) { await modalAlert('请选择ZIP文件'); return; }
-            const formData = new FormData();
-            formData.append('file', file);
-            const cookie = getcookie();
-            const problemId = uploadDataBtn.dataset.problemId;
-            uploadDataBtn.disabled = true;
-            uploadDataBtn.textContent = '上传中...';
-            try {
-                const resp = await fetch(`${BASE_URL}/api/admin/problem/${problemId}/upload-data?cookie=${cookie}`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await resp.json();
-                if (result.status === 'Y') {
-                    dataPathDisplay.textContent = `上传成功，共 ${result.file_count} 个文件`;
-                    await modalAlert('数据包上传成功');
-                } else {
-                    await modalAlert('上传失败: ' + (result.error || '未知错误'));
-                }
-            } catch (err) {
-                await modalAlert('请求失败: ' + err.message);
-            } finally {
-                uploadDataBtn.disabled = false;
-                uploadDataBtn.textContent = '上传数据包';
-            }
-        });
-
-    }
-}
-
-function showAddProblemModal() { showProblemModal(); }
-
-async function editProblem(id) {
-    const cookie = getcookie();
-    try {
-        const resp = await fetch(`${BASE_URL}/api/problem/${id}?cookie=${cookie}`);
-        const data = await resp.json();
-        if (data.status === 'Y') showProblemModal(data);
-        else alert('获取题目失败: ' + data.error);
-    } catch (err) {
-        await modalAlert(err.message);
-    }
 }
 
 async function deleteProblem(id) {
@@ -1029,100 +857,10 @@ async function deleteContest(id) {
     }
 }
 
-// ===================== 网盘管理 =====================
-let currentDiskPage = 1;
-const diskLimit = 10;
-let diskUsernameFilter = '';
-
-async function loadDiskFiles(page) {
-    currentDiskPage = page;
-    const cookie = getcookie();
-    let url = `${BASE_URL}/api/disk/admin/files?cookie=${cookie}&page=${page}&limit=${diskLimit}`;
-    if (diskUsernameFilter) url += `&username=${encodeURIComponent(diskUsernameFilter)}`;
-    try {
-        const resp = await fetch(url);
-        const data = await resp.json();
-        if (data.status !== 'Y') throw new Error(data.error);
-        renderDiskTable(data);
-    } catch (err) {
-        document.getElementById('disk-loading').innerHTML = `<p class="error">加载失败: ${err.message}</p>`;
-    }
-}
-
-function renderDiskTable(data) {
-    document.getElementById('disk-loading').style.display = 'none';
-    const container = document.getElementById('disk-table-container');
-    container.style.display = 'block';
-    let html = `<table class="problem-table"><thead><tr><th>ID</th><th>用户名</th><th>文件名</th><th>大小(MB)</th><th>上传时间</th><th>操作</th></tr></thead><tbody>`;
-    for (const f of data.files) {
-        const sizeMB = (f.file_size / 1024 / 1024).toFixed(2);
-        html += `
-            <tr>
-                <td>${f.id}</td>
-                <td>${escapeHtml(f.username)}</td>
-                <td>${escapeHtml(f.filename)}</td>
-                <td>${sizeMB}</td>
-                <td>${new Date(f.upload_time).toLocaleString()}</td>
-                <td>
-                    <button class="btn-sm btn-danger" onclick="window.deleteDiskFile(${f.id})">删除</button>
-                    <button class="btn-sm" onclick="window.adjustUserQuota(${f.user_id})">调整配额</button>
-                </td>
-            </tr>
-        `;
-    }
-    html += `</tbody></table>`;
-    container.innerHTML = html;
-
-    let paginationHtml = '';
-    for (let i = 1; i <= data.totalPages; i++) {
-        paginationHtml += `<button class="page-btn ${i === currentDiskPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
-    }
-    document.getElementById('disk-pagination').innerHTML = paginationHtml;
-    document.querySelectorAll('#disk-pagination .page-btn').forEach(btn => {
-        btn.addEventListener('click', () => loadDiskFiles(parseInt(btn.dataset.page)));
-    });
-    document.getElementById('diskFilterBtn').addEventListener('click', () => {
-        diskUsernameFilter = document.getElementById('diskUsernameFilter').value;
-        loadDiskFiles(1);
-    });
-}
-
-window.deleteDiskFile = async (fileId) => {
-    if (!(await modalConfirm('永久删除该文件？'))) return;
-    const cookie = getcookie();
-    try {
-        const resp = await fetch(`${BASE_URL}/api/disk/admin/file/${fileId}?cookie=${cookie}`, { method: 'DELETE' });
-        const data = await resp.json();
-        if (data.status === 'Y') loadDiskFiles(currentDiskPage);
-        else await modalAlert('删除失败：' + data.error);
-    } catch (err) {
-        await modalAlert('请求失败：' + err.message);
-    }
-};
-
-window.adjustUserQuota = async (userId) => {
-    const newQuotaMB = await modalPrompt('请输入新的配额 (MB)', '50');
-    if (!newQuotaMB) return;
-    const quotaBytes = parseInt(newQuotaMB) * 1024 * 1024;
-    const cookie = getcookie();
-    try {
-        const resp = await fetch(`${BASE_URL}/api/disk/admin/quota/${userId}?cookie=${cookie}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quota: quotaBytes })
-        });
-        const data = await resp.json();
-        if (data.status === 'Y') await modalAlert('配额已更新');
-        else await modalAlert('更新失败：' + data.error);
-    } catch (err) {
-        await modalAlert('请求失败：' + err.message);
-    }
-};
-
 // 辅助函数：转义HTML
 function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>]/g, function(m) {
+    if (str === undefined || str === null) return '';
+    return String(str).replace(/[&<>]/g, function(m) {
         if (m === '&') return '&amp;';
         if (m === '<') return '&lt;';
         if (m === '>') return '&gt;';
@@ -1133,6 +871,10 @@ function escapeHtml(str) {
 }
 
 function escapeAttr(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    if (str === undefined || str === null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }

@@ -189,6 +189,12 @@ async function requireLogin(req, res, next) {
     next();
 }
 
+async function requireLoginPage(req, res, next) {
+    if (req.user) return next();
+    const nextUrl = req.originalUrl && req.originalUrl !== '/' ? req.originalUrl : '/';
+    return res.redirect(`/login?next=${encodeURIComponent(nextUrl)}`);
+}
+
 async function checkAdmin(req) {
     let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
     if (req.headers.cookie && !cookie) {
@@ -250,6 +256,7 @@ async function optionalAuth(req, res, next) {
 
 module.exports = {
     requireLogin,
+    requireLoginPage,
     requireAdmin,
     requirePermission,
     optionalAuth,

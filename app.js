@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const pool = require('./db');
 const logger = require('./logger');
-const { requireLogin, checkAdmin, getUserByCookie, checkPermission, requirePermission } = require('./auth');
+const { requireLogin, requireLoginPage, checkAdmin, getUserByCookie, checkPermission, requirePermission } = require('./auth');
 const config = require('./config');
 const appPort = config.middleware.appPort;
 const { validateInt, validateString } = require('./validation');
@@ -393,7 +393,7 @@ app.get('/', async (req, res) => {
 });
 
 // 题库列表
-app.get('/problem/list', async (req, res) => {
+app.get('/problem/list', requireLoginPage, async (req, res) => {
     let page = 1;
     if (req.query.page !== undefined) {
         const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
@@ -442,14 +442,14 @@ app.get('/problem/list', async (req, res) => {
 });
 
 // 新建题目编辑页面（放在 /problem/:id 路由之前，避免被参数路由捕获）
-app.get('/problem/new', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
+app.get('/problem/new', requireLoginPage, requirePermission('can_manage_problems'), async (req, res) => {
     const isAdmin = await checkAdmin(req);
     const nav = isAdmin ? navigationAdmin : navigation;
     res.render('problem-new', { title: '新建题目', navigation: nav, user: req.user, admin: isAdmin });
 });
 
 // 题目详情
-app.get('/problem/:id', async (req, res) => {
+app.get('/problem/:id', requireLoginPage, async (req, res) => {
     const id = req.params.id;
     const idErr = validateString(id, { minLen: 1, maxLen: 50 });
     if (idErr) return res.status(400).send(`id: ${idErr}`);
@@ -458,11 +458,43 @@ app.get('/problem/:id', async (req, res) => {
         if (!problem) return res.status(404).send('题目不存在');
         const isAdmin = await checkAdmin(req);
         const canmngproblem = req.user?.id != null ? await checkPermission(req.user.id, 'can_manage_problems') : false;
-        if (!problem.opened && !canmngproblem) {
-            return res.status(403).send('该题目尚未公开');
-        }
-        problem.author_meta = await getAuthorMeta(problem.author);
         const nav = isAdmin ? navigationAdmin : navigation;
+
+        if (!problem.opened && !canmngproblem) {
+            // 未公开题目：展示一个所有信息为空的占位题目页面
+            const hiddenProblem = {
+                id: problem.id,
+                title: '题目尚未公开',
+                difficulty: 'nyao?',
+                timelm: '-1',
+                memlm: '-1',
+                time: '-1',
+                author: 'Catgirl',
+                opened: false,
+                sample: [],
+                background: '你，你是从哪里点进来的喵？！这里什么都没有喵！！',
+                description: '这里什么都没有喵！',
+                inputfmt: '什么都没有喵！',
+                outputfmt: '没有喵！',
+                hint: '没有...喵......',
+                _statement: {},
+                author_meta: {
+                    uid: null,
+                    username: 'Catgirl',
+                    role: 'user',
+                    badge: 'endministrator',
+                    name_color: 'white'
+                }
+            };
+            return res.render('problem', {
+                problem: hiddenProblem,
+                navigation: nav,
+                user: req.user,
+                canmngproblem
+            });
+        }
+
+        problem.author_meta = await getAuthorMeta(problem.author);
         res.render('problem', { problem, navigation: nav, user: req.user, canmngproblem });
     } catch (err) {
         logger.logError(`Problem detail failed for ${id}: ${err.message}`, err);
@@ -472,7 +504,7 @@ app.get('/problem/:id', async (req, res) => {
 
 
 // 编辑题目界面（作者或有权限的用户）
-app.get('/problem/edit/:id', requireLogin, requirePermission('can_manage_problems'), async (req, res) => {
+app.get('/problem/edit/:id', requireLoginPage, requirePermission('can_manage_problems'), async (req, res) => {
     const id = req.params.id;
     const idErr = validateString(id, { minLen: 1, maxLen: 50 });
     if (idErr) return res.status(400).send(`id: ${idErr}`);
@@ -491,7 +523,7 @@ app.get('/problem/edit/:id', requireLogin, requirePermission('can_manage_problem
 });
 
 // 讨论列表
-app.get('/discussions', async (req, res) => {
+app.get('/discussions', requireLoginPage, async (req, res) => {
     let page = 1;
     if (req.query.page !== undefined) {
         const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
@@ -514,7 +546,7 @@ app.get('/discussions', async (req, res) => {
 });
 
 // 讨论详情
-app.get('/discussion-detail/:cid', async (req, res) => {
+app.get('/discussion-detail/:cid', requireLoginPage, async (req, res) => {
     const cid = req.params.cid;
     const cidErr = validateString(cid, { minLen: 1, maxLen: 50 });
     if (cidErr) return res.status(400).send(`cid: ${cidErr}`);
@@ -540,7 +572,7 @@ app.get('/discussion-detail/:cid', async (req, res) => {
 });
 
 // 提交列表
-app.get('/record/list', requireLogin, async (req, res) => {
+app.get('/record/list', requireLoginPage, requireLoginPage, async (req, res) => {
     let page = 1;
     if (req.query.page !== undefined) {
         const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
@@ -665,7 +697,7 @@ app.get('/record/list', requireLogin, async (req, res) => {
 });
 
 // 单个评测详情
-app.get('/record/:rid', requireLogin, async (req, res) => {
+app.get('/record/:rid', requireLoginPage, async (req, res) => {
     const rid = req.params.rid;
     const ridErr = validateInt(rid, { positive: true, max: 2147483647 });
     if (ridErr) return res.status(400).send(`rid: ${ridErr}`);
@@ -737,7 +769,7 @@ app.get('/record/:rid', requireLogin, async (req, res) => {
 });
 
 // 比赛列表
-app.get('/contests', async (req, res) => {
+app.get('/contests', requireLoginPage, async (req, res) => {
     let page = 1;
     if (req.query.page !== undefined) {
         const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
@@ -764,7 +796,7 @@ app.get('/contests', async (req, res) => {
 });
 
 // 比赛详情
-app.get('/contest/:id', async (req, res) => {
+app.get('/contest/:id', requireLoginPage, async (req, res) => {
     const id = req.params.id;
     const idErr = validateString(id, { minLen: 1, maxLen: 50 });
     if (idErr) return res.status(400).send(`id: ${idErr}`);
@@ -787,7 +819,7 @@ app.get('/contest/:id', async (req, res) => {
 });
 
 // 个人主页（公开）
-app.get('/profile/:username', async (req, res) => {
+app.get('/profile/:username', requireLoginPage, async (req, res) => {
     const username = req.params.username;
     const unErr = validateString(username, { minLen: 1, maxLen: 100 });
     if (unErr) return res.status(400).send(`username: ${unErr}`);
@@ -816,7 +848,7 @@ app.get('/profile-edit', requireLogin, async (req, res) => {
 });
 
 // 私信页面
-app.get('/chat', requireLogin, async (req, res) => {
+app.get('/chat', requireLoginPage, async (req, res) => {
     let page = 1;
     if (req.query.page !== undefined) {
         const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
@@ -839,7 +871,7 @@ app.get('/chat', requireLogin, async (req, res) => {
 });
 
 // 个人设置
-app.get('/settings', requireLogin, async (req, res) => {
+app.get('/settings', requireLoginPage, async (req, res) => {
     const isAdmin = await checkAdmin(req);
     const nav = isAdmin ? navigationAdmin : navigation;
     res.render('settings', { navigation: nav, user: req.user });
@@ -860,9 +892,9 @@ app.get('/register', async (req, res) => {
 });
 
 // 管理后台页面
-app.get('/admin', async (req, res) => {
+app.get('/admin', requireLoginPage, async (req, res) => {
     const isAdmin = await checkAdmin(req);
-    if (!isAdmin) return res.status(403).send('无权限');
+    if (!isAdmin) return res.status(403).send('开始试探管理员了喵！想被猫猫撅掉了喵！');
     const nav = navigationAdmin;
     res.render('admin', { navigation: nav, user: req.user });
 });

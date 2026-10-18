@@ -3,10 +3,19 @@ const path = require('path');
 const pool = require('./db');
 const logger = require('./logger');
 const { requireLogin, checkAdmin, getUserByCookie, checkPermission, requirePermission } = require('./auth');
-const appPort = require('./config').middleware.appPort;
+const config = require('./config');
+const appPort = config.middleware.appPort;
 const { validateInt, validateString } = require('./validation');
 
 const app = express();
+
+// 禁止直接访问 index.html
+app.use((req, res, next) => {
+    if (req.url.endsWith('/index.html') || req.url === '/index.html') {
+        return res.status(403).send('Forbidden: direct access to index.html is not allowed.');
+    }
+    next();
+});
 
 // 设置模板引擎
 app.set('view engine', 'ejs');
@@ -37,15 +46,6 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use((req, res, next) => {
-    res.set({
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Surrogate-Control': 'no-store'
-    });
-    next();
-});
 
 app.use((req, res, next) => {
     req.injections = req.injections || {};
@@ -135,11 +135,32 @@ app.use(async (req, res, next) => {
     next();
 });
 
-// 禁止直接访问 index.html
+// ---------- 静态资源（CSS, JS, 图片等） ----------
+app.use('/assets', express.static(path.join(__dirname, 'webpage/assets'), {
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
+}));
+app.use('/admin/assets', express.static(path.join(__dirname, 'webpage/admin/assets'), {
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
+}));
+app.use(express.static(path.join(__dirname, 'webpage'), {
+    index: false,
+    extensions: ['txt', 'xml', 'ico', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'zip', 'rar', 'tar', 'gz'],
+    maxAge: '5m',
+    etag: true,
+    lastModified: true
+}));
+
 app.use((req, res, next) => {
-    if (req.url.endsWith('/index.html') || req.url === '/index.html') {
-        return res.status(403).send('Forbidden: direct access to index.html is not allowed.');
-    }
+    res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+    });
     next();
 });
 
@@ -854,32 +875,6 @@ app.use('/api', require('./routes/admin'));
 // app.use('/api/contests', require('./routes/contest'));
 // app.use('/api/profile', require('./routes/profile'));
 
-// ---------- 静态资源（CSS, JS, 图片等） ----------
-app.use('/assets', express.static(path.join(__dirname, 'webpage/assets'), {
-    maxAge: '5m',
-    etag: true,
-    lastModified: true
-}));
-app.use('/admin/assets', express.static(path.join(__dirname, 'webpage/admin/assets'), {
-    maxAge: '5m',
-    etag: true,
-    lastModified: true
-}));
-app.use('/favicon.ico', express.static(path.join(__dirname, 'webpage/favicon.ico'), {
-    maxAge: '5m',
-    etag: true,
-    lastModified: true
-}));
-
-// 对于其他未匹配的静态文件（如 robots.txt），仍然允许通过原有静态中间件，但不提供 .html 文件
-app.use(express.static(path.join(__dirname, 'webpage'), {
-    index: false,
-    extensions: ['txt', 'xml', 'ico', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'],
-    maxAge: '5m',
-    etag: true,
-    lastModified: true
-}));
-
 // 全局错误处理中间件（必须在所有路由之后）
 app.use(async (err, req, res, next) => {
     const ip = logger.getClientIp(req);
@@ -902,10 +897,7 @@ app.use((req, res) => {
 
 // ---------- 启动服务器 ----------
 async function ensureDirs() {
-    // const dirs = [SUBMIT_ROOT, COMPILE_ROOT, DATA_ROOT, CHECKER_ROOT, TEMP_UPLOAD];
-    // for (const d of dirs) {
-    //     await fs.promises.mkdir(d, { recursive: true });
-    // }
+    require('fs').promises.mkdir(config.upload.tempDir);
 }
 
 setInterval(async () => {

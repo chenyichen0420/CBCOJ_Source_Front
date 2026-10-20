@@ -39,6 +39,19 @@
 
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
     <script>
+        function getSafeNextUrl() {
+            const next = new URLSearchParams(window.location.search).get('next');
+            if (!next) return '/';
+            try {
+                const url = new URL(next, window.location.origin);
+                if (url.origin !== window.location.origin) {
+                    return '/';
+                }
+                return url.pathname + url.search + url.hash;
+            } catch (e) {
+                return '/';
+            }
+        }
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -47,7 +60,7 @@
             if (data.status === 'Y') {
                 document.cookie = `user_cookie=${data.cookie}; path=/`;
                 alert('登录成功');
-                window.location.href = '/';
+                window.location.href = getSafeNextUrl();
             } else {
                 document.getElementById('message').textContent = '登录失败: ' + data.error;
             }

@@ -1,207 +1,207 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= title %> - CBCOJ</title>
-    <link rel="stylesheet" href="/assets/base.css">
-    <link rel="stylesheet" href="/assets/components.css">
-    <link rel="stylesheet" href="/assets/layout.css">
-    <script src="/assets/marked.min.js"></script>
-    <script src="/assets/purify.min.js"></script>
-    <script src="/assets/katex.min.js"></script>
-    <script src="/assets/auto-render.min.js"></script>
-    <style>
-        .problem-editor-container { max-width: 1440px; }
-        #problem-form { width: 100%; }
-        .problem-form-section { margin-top: 16px; }
-        .problem-form-section > label { display: block; margin-bottom: 6px; font-weight: 600; }
-        .problem-form-section input,
-        .problem-form-section textarea { width: 100%; }
-        .problem-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-        .markdown-preview {
-            display: none;
-            margin-top: 8px;
-            padding: 12px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg-secondary);
-            overflow-wrap: anywhere;
-        }
-        .markdown-preview.active { display: block; }
-        .sample-item { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
-        .problem-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
-        @media (max-width: 700px) {
-            .problem-limits { grid-template-columns: 1fr; gap: 0; }
-            .sample-item { grid-template-columns: 1fr; }
-        }
-    </style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title><%= title %> - CBCOJ</title>
+	<link rel="stylesheet" href="/assets/base.css">
+	<link rel="stylesheet" href="/assets/components.css">
+	<link rel="stylesheet" href="/assets/layout.css">
+	<script src="/assets/marked.min.js"></script>
+	<script src="/assets/purify.min.js"></script>
+	<script src="/assets/katex.min.js"></script>
+	<script src="/assets/auto-render.min.js"></script>
+	<style>
+		.problem-editor-container { max-width: 1440px; }
+		#problem-form { width: 100%; }
+		.problem-form-section { margin-top: 16px; }
+		.problem-form-section > label { display: block; margin-bottom: 6px; font-weight: 600; }
+		.problem-form-section input,
+		.problem-form-section textarea { width: 100%; }
+		.problem-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+		.markdown-preview {
+			display: none;
+			margin-top: 8px;
+			padding: 12px;
+			border: 1px solid var(--border);
+			border-radius: 8px;
+			background: var(--bg-secondary);
+			overflow-wrap: anywhere;
+		}
+		.markdown-preview.active { display: block; }
+		.sample-item { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+		.problem-actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+		@media (max-width: 700px) {
+			.problem-limits { grid-template-columns: 1fr; gap: 0; }
+			.sample-item { grid-template-columns: 1fr; }
+		}
+	</style>
 </head>
 <body>
 <nav>
-    <div class="nav-left"><%- navigation %></div>
+	<div class="nav-left"><%- navigation %></div>
 </nav>
 <main class="page">
-    <div class="container problem-editor-container">
-        <h1><%- title %></h1>
-        <p>提交时将自动申请题目编号，创建的题目默认不公开。</p>
-        <form id="problem-form">
-            <div class="problem-form-section">
-                <label for="problem-title">题目名称</label>
-                <input id="problem-title" name="title" required maxlength="200">
-            </div>
+	<div class="container problem-editor-container">
+		<h1><%- title %></h1>
+		<p>提交时将自动申请题目编号，创建的题目默认不公开。</p>
+		<form id="problem-form">
+			<div class="problem-form-section">
+				<label for="problem-title">题目名称</label>
+				<input id="problem-title" name="title" required maxlength="200">
+			</div>
 
-            <div class="problem-limits">
-                <div class="problem-form-section">
-                    <label for="time-limit">时间限制 (ms)</label>
-                    <input id="time-limit" type="number" name="timelimit" min="1" required value="1000">
-                </div>
-                <div class="problem-form-section">
-                    <label for="memory-limit">空间限制 (KB)</label>
-                    <input id="memory-limit" type="number" name="memorylimit" min="1" required value="262144">
-                </div>
-            </div>
+			<div class="problem-limits">
+				<div class="problem-form-section">
+					<label for="time-limit">时间限制 (ms)</label>
+					<input id="time-limit" type="number" name="timelimit" min="1" required value="1000">
+				</div>
+				<div class="problem-form-section">
+					<label for="memory-limit">空间限制 (KB)</label>
+					<input id="memory-limit" type="number" name="memorylimit" min="1" required value="262144">
+				</div>
+			</div>
 
-            <% for (const field of [
-                { name: 'background', label: '题目背景', rows: 5 },
-                { name: 'description', label: '题目描述', rows: 10 },
-                { name: 'inputfmt', label: '输入格式', rows: 5 },
-                { name: 'outputfmt', label: '输出格式', rows: 5 }
-            ]) { %>
-            <div class="problem-form-section markdown-field">
-                <label for="field-<%= field.name %>"><%= field.label %></label>
-                <textarea id="field-<%= field.name %>" name="<%= field.name %>" rows="<%= field.rows %>" <%= field.name === 'description' ? 'required' : '' %>></textarea>
-                <div class="markdown-preview" data-preview-for="<%= field.name %>" aria-live="polite"></div>
-            </div>
-            <% } %>
+			<% for (const field of [
+				{ name: 'background', label: '题目背景', rows: 5 },
+				{ name: 'description', label: '题目描述', rows: 10 },
+				{ name: 'inputfmt', label: '输入格式', rows: 5 },
+				{ name: 'outputfmt', label: '输出格式', rows: 5 }
+			]) { %>
+			<div class="problem-form-section markdown-field">
+				<label for="field-<%= field.name %>"><%= field.label %></label>
+				<textarea id="field-<%= field.name %>" name="<%= field.name %>" rows="<%= field.rows %>" <%= field.name === 'description' ? 'required' : '' %>></textarea>
+				<div class="markdown-preview" data-preview-for="<%= field.name %>" aria-live="polite"></div>
+			</div>
+			<% } %>
 
-            <div class="problem-form-section">
-                <label>样例</label>
-                <div id="sample-area">
-                    <div class="sample-item">
-                        <textarea name="sample_input" rows="3" placeholder="样例输入"></textarea>
-                        <textarea name="sample_output" rows="3" placeholder="样例输出"></textarea>
-                        <button type="button" class="remove-sample">移除</button>
-                    </div>
-                </div>
-                <button type="button" id="add-sample">添加样例</button>
-            </div>
+			<div class="problem-form-section">
+				<label>样例</label>
+				<div id="sample-area">
+					<div class="sample-item">
+						<textarea name="sample_input" rows="3" placeholder="样例输入"></textarea>
+						<textarea name="sample_output" rows="3" placeholder="样例输出"></textarea>
+						<button type="button" class="remove-sample">移除</button>
+					</div>
+				</div>
+				<button type="button" id="add-sample">添加样例</button>
+			</div>
 
-            <div class="problem-form-section markdown-field">
-                <label for="field-hint">说明提示</label>
-                <textarea id="field-hint" name="hint" rows="5"></textarea>
-                <div class="markdown-preview" data-preview-for="hint" aria-live="polite"></div>
-            </div>
+			<div class="problem-form-section markdown-field">
+				<label for="field-hint">说明提示</label>
+				<textarea id="field-hint" name="hint" rows="5"></textarea>
+				<div class="markdown-preview" data-preview-for="hint" aria-live="polite"></div>
+			</div>
 
-            <div class="problem-form-section">
-                <label for="difficulty">难度</label>
-                <input id="difficulty" name="difficulty">
-            </div>
+			<div class="problem-form-section">
+				<label for="difficulty">难度</label>
+				<input id="difficulty" name="difficulty">
+			</div>
 
-            <div class="problem-actions">
-                <button type="submit">创建题目</button>
-                <a href="/problem/list">取消</a>
-            </div>
-        </form>
-    </div>
+			<div class="problem-actions">
+				<button type="submit">创建题目</button>
+				<a href="/problem/list">取消</a>
+			</div>
+		</form>
+	</div>
 </main>
 <script src="/assets/markdown-renderer.js"></script>
 <script>
-    const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'hint'];
+	const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'hint'];
 
-    function renderMarkdownPreview(field) {
-        const textarea = document.getElementById(`field-${field}`);
-        const preview = document.querySelector(`[data-preview-for="${field}"]`);
-        preview.innerHTML = renderMarkdownWithMath(textarea.value || '');
-        if (typeof renderMathInElement !== 'undefined') {
-            renderMathInElement(preview, {
-                delimiters: [
-                    { left: '$$', right: '$$', display: true },
-                    { left: '$', right: '$', display: false },
-                    { left: '\\(', right: '\\)', display: false },
-                    { left: '\\[', right: '\\]', display: true }
-                ],
-                throwOnError: false
-            });
-        }
-    }
+	function renderMarkdownPreview(field) {
+		const textarea = document.getElementById(`field-${field}`);
+		const preview = document.querySelector(`[data-preview-for="${field}"]`);
+		preview.innerHTML = renderMarkdownWithMath(textarea.value || '');
+		if (typeof renderMathInElement !== 'undefined') {
+			renderMathInElement(preview, {
+				delimiters: [
+					{ left: '$$', right: '$$', display: true },
+					{ left: '$', right: '$', display: false },
+					{ left: '\\(', right: '\\)', display: false },
+					{ left: '\\[', right: '\\]', display: true }
+				],
+				throwOnError: false
+			});
+		}
+	}
 
-    for (const field of markdownFields) {
-        const textarea = document.getElementById(`field-${field}`);
-        const preview = document.querySelector(`[data-preview-for="${field}"]`);
-        textarea.addEventListener('focus', () => {
-            document.querySelectorAll('.markdown-preview.active').forEach(item => item.classList.remove('active'));
-            preview.classList.add('active');
-            renderMarkdownPreview(field);
-        });
-        textarea.addEventListener('blur', () => preview.classList.remove('active'));
-        textarea.addEventListener('input', () => renderMarkdownPreview(field));
-    }
+	for (const field of markdownFields) {
+		const textarea = document.getElementById(`field-${field}`);
+		const preview = document.querySelector(`[data-preview-for="${field}"]`);
+		textarea.addEventListener('focus', () => {
+			document.querySelectorAll('.markdown-preview.active').forEach(item => item.classList.remove('active'));
+			preview.classList.add('active');
+			renderMarkdownPreview(field);
+		});
+		textarea.addEventListener('blur', () => preview.classList.remove('active'));
+		textarea.addEventListener('input', () => renderMarkdownPreview(field));
+	}
 
-    function addSample(input = '', output = '') {
-        const item = document.createElement('div');
-        item.className = 'sample-item';
-        const inputField = document.createElement('textarea');
-        inputField.name = 'sample_input';
-        inputField.rows = 3;
-        inputField.placeholder = '样例输入';
-        inputField.value = input;
-        const outputField = document.createElement('textarea');
-        outputField.name = 'sample_output';
-        outputField.rows = 3;
-        outputField.placeholder = '样例输出';
-        outputField.value = output;
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.textContent = '移除';
-        removeButton.addEventListener('click', () => item.remove());
-        item.append(inputField, outputField, removeButton);
-        document.getElementById('sample-area').appendChild(item);
-    }
+	function addSample(input = '', output = '') {
+		const item = document.createElement('div');
+		item.className = 'sample-item';
+		const inputField = document.createElement('textarea');
+		inputField.name = 'sample_input';
+		inputField.rows = 3;
+		inputField.placeholder = '样例输入';
+		inputField.value = input;
+		const outputField = document.createElement('textarea');
+		outputField.name = 'sample_output';
+		outputField.rows = 3;
+		outputField.placeholder = '样例输出';
+		outputField.value = output;
+		const removeButton = document.createElement('button');
+		removeButton.type = 'button';
+		removeButton.textContent = '移除';
+		removeButton.addEventListener('click', () => item.remove());
+		item.append(inputField, outputField, removeButton);
+		document.getElementById('sample-area').appendChild(item);
+	}
 
-    document.getElementById('add-sample').addEventListener('click', () => addSample());
-    document.querySelectorAll('#sample-area .remove-sample').forEach(button => {
-        button.addEventListener('click', () => button.closest('.sample-item').remove());
-    });
+	document.getElementById('add-sample').addEventListener('click', () => addSample());
+	document.querySelectorAll('#sample-area .remove-sample').forEach(button => {
+		button.addEventListener('click', () => button.closest('.sample-item').remove());
+	});
 
-    document.getElementById('problem-form').addEventListener('submit', async event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const submitButton = form.querySelector('[type="submit"]');
-        const samples = Array.from(document.querySelectorAll('#sample-area .sample-item'))
-            .map(item => ({
-                input: item.querySelector('[name="sample_input"]').value,
-                output: item.querySelector('[name="sample_output"]').value
-            }))
-            .filter(sample => sample.input || sample.output);
-        const payload = {
-            title: form.elements.title.value,
-            timelimit: Number(form.elements.timelimit.value),
-            memorylimit: Number(form.elements.memorylimit.value),
-            difficulty: form.elements.difficulty.value,
-            background: form.elements.background.value,
-            description: form.elements.description.value,
-            inputfmt: form.elements.inputfmt.value,
-            outputfmt: form.elements.outputfmt.value,
-            hint: form.elements.hint.value,
-            sample: JSON.stringify(samples)
-        };
+	document.getElementById('problem-form').addEventListener('submit', async event => {
+		event.preventDefault();
+		const form = event.currentTarget;
+		const submitButton = form.querySelector('[type="submit"]');
+		const samples = Array.from(document.querySelectorAll('#sample-area .sample-item'))
+			.map(item => ({
+				input: item.querySelector('[name="sample_input"]').value,
+				output: item.querySelector('[name="sample_output"]').value
+			}))
+			.filter(sample => sample.input || sample.output);
+		const payload = {
+			title: form.elements.title.value,
+			timelimit: Number(form.elements.timelimit.value),
+			memorylimit: Number(form.elements.memorylimit.value),
+			difficulty: form.elements.difficulty.value,
+			background: form.elements.background.value,
+			description: form.elements.description.value,
+			inputfmt: form.elements.inputfmt.value,
+			outputfmt: form.elements.outputfmt.value,
+			hint: form.elements.hint.value,
+			sample: JSON.stringify(samples)
+		};
 
-        try {
-            submitButton.disabled = true;
-            const response = await fetch('/api/problem/new', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const result = await response.json();
-            if (result.status !== 'Y') throw new Error(result.error || '题目创建失败');
-            window.location.href = `/problem/edit/${encodeURIComponent(result.id)}`;
-        } catch (err) {
-            alert('创建失败: ' + err.message);
-            submitButton.disabled = false;
-        }
-    });
+		try {
+			submitButton.disabled = true;
+			const response = await fetch('/api/problem/new', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const result = await response.json();
+			if (result.status !== 'Y') throw new Error(result.error || '题目创建失败');
+			window.location.href = `/problem/edit/${encodeURIComponent(result.id)}`;
+		} catch (err) {
+			alert('创建失败: ' + err.message);
+			submitButton.disabled = false;
+		}
+	});
 </script>
 </body>
 </html>

@@ -1,163 +1,163 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CBCOJ - 编程竞技在线判题系统</title>
-    <link rel="stylesheet" href="/assets/base.css">
-    <link rel="stylesheet" href="/assets/components.css">
-    <link rel="stylesheet" href="/assets/layout.css">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>CBCOJ - 编程竞技在线判题系统</title>
+	<link rel="stylesheet" href="/assets/base.css">
+	<link rel="stylesheet" href="/assets/components.css">
+	<link rel="stylesheet" href="/assets/layout.css">
 </head>
 <body>
-    <nav>
-        <div class="nav-left"><%- navigation %></div>
-        <div class="nav-right">
-            <div class="login-content">
-                <div id="login-area"></div>
-                <div id="login-status">
-                    <div class="status-indicator" id="statusIndicator"></div>
-                    <span id="statusText">正在检测登录状态...</span>
-                </div>
-            </div>
-        </div>
-    </nav>
+	<nav>
+		<div class="nav-left"><%- navigation %></div>
+		<div class="nav-right">
+			<div class="login-content">
+				<div id="login-area"></div>
+				<div id="login-status">
+					<div class="status-indicator" id="statusIndicator"></div>
+					<span id="statusText">正在检测登录状态...</span>
+				</div>
+			</div>
+		</div>
+	</nav>
 
-    <main class="page">
-        <div class="container">
-            <h1>CBCOJ - 编程竞技在线判题系统</h1>
-            <div id="content">
-                <div class="home-layout">
-                    <div class="left card">
-                        <h2>🚀 欢迎来到 CBCOJ</h2>
-                        <p>CBCOJ 是一个面向算法竞赛爱好者、编程学习者的在线判题系统。我们致力于提供一个公平、高效、友好的编程练习与竞赛平台。</p>
-                        <div class="features">
-                            <h3>✨ 平台特色</h3>
-                            <ul>
-                                <li><strong>丰富题库</strong> - 涵盖基础语法、数据结构、算法竞赛等各难度题目</li>
-                                <li><strong>实时评测</strong> - 支持多种编程语言，即时返回评测结果</li>
-                                <li><strong>讨论交流</strong> - 每道题目均有讨论区，可与他人交流解题思路</li>
-                                <li><strong>比赛系统</strong> - 定期举办在线编程比赛，提升实战能力</li>
-                            </ul>
-                        </div>
+	<main class="page">
+		<div class="container">
+			<h1>CBCOJ - 编程竞技在线判题系统</h1>
+			<div id="content">
+				<div class="home-layout">
+					<div class="left card">
+						<h2>🚀 欢迎来到 CBCOJ</h2>
+						<p>CBCOJ 是一个面向算法竞赛爱好者、编程学习者的在线判题系统。我们致力于提供一个公平、高效、友好的编程练习与竞赛平台。</p>
+						<div class="features">
+							<h3>✨ 平台特色</h3>
+							<ul>
+								<li><strong>丰富题库</strong> - 涵盖基础语法、数据结构、算法竞赛等各难度题目</li>
+								<li><strong>实时评测</strong> - 支持多种编程语言，即时返回评测结果</li>
+								<li><strong>讨论交流</strong> - 每道题目均有讨论区，可与他人交流解题思路</li>
+								<li><strong>比赛系统</strong> - 定期举办在线编程比赛，提升实战能力</li>
+							</ul>
+						</div>
 
-                        <div class="stats">
-                            <h3>📊 平台数据</h3>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <span class="stat-number"><%= stats[0] %></span>
-                                    <span class="stat-label">题目数量</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-number"><%= stats[1] %></span>
-                                    <span class="stat-label">注册用户</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-number"><%= stats[2] %></span>
-                                    <span class="stat-label">提交记录</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-number"><%= stats[3] %></span>
-                                    <span class="stat-label">举办比赛</span>
-                                </div>
-                            </div>
-                        </div>
+						<div class="stats">
+							<h3>📊 平台数据</h3>
+							<div class="stats-grid">
+								<div class="stat-item">
+									<span class="stat-number"><%= stats[0] %></span>
+									<span class="stat-label">题目数量</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-number"><%= stats[1] %></span>
+									<span class="stat-label">注册用户</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-number"><%= stats[2] %></span>
+									<span class="stat-label">提交记录</span>
+								</div>
+								<div class="stat-item">
+									<span class="stat-number"><%= stats[3] %></span>
+									<span class="stat-label">举办比赛</span>
+								</div>
+							</div>
+						</div>
 
-                        <div class="quick-start">
-                            <h3>🎯 快速开始</h3>
-                            <ol>
-                                <li><a href="/register">注册账号</a>（已注册用户请直接登录）</li>
-                                <li>前往<a href="/problem/list">题库</a>选择题目开始练习</li>
-                                <li>查看<a href="/record/list">评测记录</a>了解自己的提交情况</li>
-                                <li>参与<a href="/contests">比赛</a>挑战更高难度</li>
-                            </ol>
-                        </div>
-                    </div>
+						<div class="quick-start">
+							<h3>🎯 快速开始</h3>
+							<ol>
+								<li><a href="/register">注册账号</a>（已注册用户请直接登录）</li>
+								<li>前往<a href="/problem/list">题库</a>选择题目开始练习</li>
+								<li>查看<a href="/record/list">评测记录</a>了解自己的提交情况</li>
+								<li>参与<a href="/contests">比赛</a>挑战更高难度</li>
+							</ol>
+						</div>
+					</div>
 
-                    <div class="right card">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
-                            <div style="display:flex;align-items:center;gap:8px;">
-                                服务状态：
-                                <div id="healthDesc">未知</div>
-                                <div id="healthIndicator" style="width:12px;height:12px;border-radius:50%;background:#ccc;box-shadow:0 0 0 2px rgba(0,0,0,0.03);"></div>
-                            </div>
-                            <div style="display:flex;align-items:center;gap:8px;">
-                                <div style="font-size:12px;color:#666;">上次检测：<span id="healthText"><%= healthText %></span></div>
-                            </div>
-                        </div>
+					<div class="right card">
+						<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+							<div style="display:flex;align-items:center;gap:8px;">
+								服务状态：
+								<div id="healthDesc">未知</div>
+								<div id="healthIndicator" style="width:12px;height:12px;border-radius:50%;background:#ccc;box-shadow:0 0 0 2px rgba(0,0,0,0.03);"></div>
+							</div>
+							<div style="display:flex;align-items:center;gap:8px;">
+								<div style="font-size:12px;color:#666;">上次检测：<span id="healthText"><%= healthText %></span></div>
+							</div>
+						</div>
 
-                        <div class="recent-activity">
-                            <h4>📝 最近动态</h4>
-                            <ul>
-                                <li>用户 <strong>NyaingCBC</strong> 解决了 <a href="/problem/aplusb">A+B Problem</a> 吗？</li>
-                                <li>比赛 <strong>「滚木」</strong> 正在报名吗？</li>
-                                <li>题目 <strong>「滚木」</strong> 新增题解0篇</li>
-                                <li>系统更新：下线了一车功能因为他妈的写不完了 :(</li>
-                            </ul>
-                        </div>
+						<div class="recent-activity">
+							<h4>📝 最近动态</h4>
+							<ul>
+								<li>用户 <strong>NyaingCBC</strong> 解决了 <a href="/problem/aplusb">A+B Problem</a> 吗？</li>
+								<li>比赛 <strong>「滚木」</strong> 正在报名吗？</li>
+								<li>题目 <strong>「滚木」</strong> 新增题解0篇</li>
+								<li>系统更新：下线了一车功能因为他妈的写不完了 :(</li>
+							</ul>
+						</div>
 
-                        <hr>
+						<hr>
 
-                        <div class="friend-links">
-                            <h4 class="text-center">🔗 友链</h4>
-                            <ul class="link-list">
-                                <li><a href="http://oj.lzj-blog.top" target="_blank">LZJ OJ</a> - 兄弟OJ平台</li>
-                                <li><a href="https://blog.cbcoj.dpdns.org" target="_blank">NyaingCBC's 博客</a> - 后端开发者博客</li>
-                                <li><a href="https://lzj-blog.top" target="_blank">starfallen's 小窝</a> - 网页端开发者博客</li>
-                                <li><a href="https://www.luogu.com.cn" target="_blank">洛谷</a> - 知名算法竞赛社区</li>
-                                <li><a href="https://codeforces.com" target="_blank">Codeforces</a> - 国际算法竞赛平台</li>
-                            </ul>
-                        </div>
+						<div class="friend-links">
+							<h4 class="text-center">🔗 友链</h4>
+							<ul class="link-list">
+								<li><a href="http://oj.lzj-blog.top" target="_blank">LZJ OJ</a> - 兄弟OJ平台</li>
+								<li><a href="https://blog.cbcoj.dpdns.org" target="_blank">NyaingCBC's 博客</a> - 后端开发者博客</li>
+								<li><a href="https://lzj-blog.top" target="_blank">starfallen's 小窝</a> - 网页端开发者博客</li>
+								<li><a href="https://www.luogu.com.cn" target="_blank">洛谷</a> - 知名算法竞赛社区</li>
+								<li><a href="https://codeforces.com" target="_blank">Codeforces</a> - 国际算法竞赛平台</li>
+							</ul>
+						</div>
 
-                        <hr>
+						<hr>
 
-                        <div class="platform-info">
-                            <p class="text-center">
-                                <small>© 2026 CBCOJ 在线判题系统</small><br>
-                                <small>本平台仅用于编程学习与交流</small><br>
-                                <small>特别鸣谢 LZJOJ 开发者授权共享网页 UI</small><br>
-                                <small>本平台前端部分基于其界面修改</small><br>
-                                <small>网页如有问题请联系：<a href="mailto:18908232278@163.com">18908232278@163.com</a></small><br>
-                                <small>后端如有问题请联系：<a href="mailto:18190772965@163.com">18190772965@163.com</a></small><br>
-                            </p>
+						<div class="platform-info">
+							<p class="text-center">
+								<small>© 2026 CBCOJ 在线判题系统</small><br>
+								<small>本平台仅用于编程学习与交流</small><br>
+								<small>特别鸣谢 LZJOJ 开发者授权共享网页 UI</small><br>
+								<small>本平台前端部分基于其界面修改</small><br>
+								<small>网页如有问题请联系：<a href="mailto:18908232278@163.com">18908232278@163.com</a></small><br>
+								<small>后端如有问题请联系：<a href="mailto:18190772965@163.com">18190772965@163.com</a></small><br>
+							</p>
 
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</main>
 
-    <script type="text/javascript" src="/assets/checklogin.min.js"></script>
-    <script type="text/javascript" src="/assets/index.min.js"></script>
-    <script>
-        (function(){
-                try {
-                const health = <%- JSON.stringify(health || { overall: 'red', lastChecked: Date.now() }) %>;
-                const el = document.getElementById('healthIndicator');
-                const desc = document.getElementById('healthDesc');
-                if (el) {
-                    if (health.overall === 'green') {
-                        el.style.background = 'green';
-                        if (desc) { desc.textContent = '正常'; }
-                    }
-                    else if (health.overall === 'yellow') {
-                        el.style.background = 'gold';
-                        if (desc) { desc.textContent = '降级'; }
-                    }
-                    else {
-                        el.style.background = 'red';
-                        if (desc) { desc.textContent = '异常'; }
-                    }
-                }
-                const ht = document.getElementById('healthText');
-                if (ht && health.lastChecked) {
-                    const d = new Date(health.lastChecked);
-                    ht.textContent = d.toLocaleString();
-                }
-            } catch (e) {
-                // ignore
-            }
-        })();
-    </script>
+	<script type="text/javascript" src="/assets/checklogin.min.js"></script>
+	<script type="text/javascript" src="/assets/index.min.js"></script>
+	<script>
+		(function(){
+				try {
+				const health = <%- JSON.stringify(health || { overall: 'red', lastChecked: Date.now() }) %>;
+				const el = document.getElementById('healthIndicator');
+				const desc = document.getElementById('healthDesc');
+				if (el) {
+					if (health.overall === 'green') {
+						el.style.background = 'green';
+						if (desc) { desc.textContent = '正常'; }
+					}
+					else if (health.overall === 'yellow') {
+						el.style.background = 'gold';
+						if (desc) { desc.textContent = '降级'; }
+					}
+					else {
+						el.style.background = 'red';
+						if (desc) { desc.textContent = '异常'; }
+					}
+				}
+				const ht = document.getElementById('healthText');
+				if (ht && health.lastChecked) {
+					const d = new Date(health.lastChecked);
+					ht.textContent = d.toLocaleString();
+				}
+			} catch (e) {
+				// ignore
+			}
+		})();
+	</script>
 </body>
 </html>

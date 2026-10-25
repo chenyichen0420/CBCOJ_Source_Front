@@ -164,19 +164,31 @@ app.use((req, res, next) => {
 	next();
 });
 
-// 可选认证中间件（用于访问日志获取用户信息）
+// 用户信息获取与设置中间件，顺序不可调整！先于所有动态资源逻辑
 app.use(async (req, res, next) => {
-	let cookie = req.cookies?.user_cookie;
-	if (!cookie && req.headers.cookie) {
+	let cookie = null;
+	if (req.body && typeof req.body === 'object' && req.body.cookie) {
+		cookie = String(req.body.cookie);
+	} else if (req.query && typeof req.query === 'object' && req.query.cookie) {
+		cookie = String(req.query.cookie);
+	} else if (req.headers.cookie) {
 		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) cookie = decodeURIComponent(match[1]);
+		if (match) {
+			try {
+				cookie = decodeURIComponent(match[1]);
+			} catch (_) {
+				cookie = match[1];
+			}
+		}
 	}
+
+	req.userCookie = cookie;
 	if (cookie) {
 		try {
 			const user = await getUserByCookie(cookie);
 			if (user) req.user = user;
-		} catch (e) {
-			// 忽略认证错误，继续处理请求
+		} catch (err) {
+			logger.logError(`globalAuth failed: ${err.message}`, err);
 		}
 	}
 	next();
@@ -502,7 +514,6 @@ app.get('/problem/:id', requireLoginPage, async (req, res) => {
 	}
 });
 
-
 // 编辑题目界面（作者或有权限的用户）
 app.get('/problem/edit/:id', requireLoginPage, requirePermission('can_manage_problems'), async (req, res) => {
 	const id = req.params.id;
@@ -522,6 +533,63 @@ app.get('/problem/edit/:id', requireLoginPage, requirePermission('can_manage_pro
 	}
 });
 
+/*
+关于文章功能的一些构思：
+
+1. 风险控制，文章的创建于编辑受限制于权限，普通用户不可发布文章；
+2. 文章仍然使用成熟的 md+latex 渲染系统
+3. 文章内容以 utf-8 编码的 base64 存储在中间件当中
+4. 文章元信息仍然使用类似提交记录的定长二进制文件存储
+5. 文章权限可以设置为公开/隐藏，其中公开为登录后可见
+6. 文章**主要**服务于题目题解展示，但是对于一些重要的通知也可以使用
+7. 文章的创建与编辑界面使用类似题目编辑界面的表单，支持 md+latex 的预览
+8. 文章**不提供列表**，类似于云剪贴板，但是题解在题目下单独出现索引
+9. 题目下的单独索引可以直接使用类似 pid 检索提交记录的实现
+*/
+
+// 文章页面
+app.get('/article/:id', requireLoginPage, async (req, res) => {
+	res.status(404).send(JSON.stringify(
+		{
+			status: 'N',
+			"error": "Route not found"
+		}
+	));
+	//not implemented yet
+});
+
+// 文章编辑界面
+app.get('/article/edit/:id', requireLoginPage, requirePermission('can_manage_articles'), async (req, res) => {
+	res.status(404).send(JSON.stringify(
+		{
+			status: 'N',
+			"error": "Route not found"
+		}
+	));
+	//not implemented yet
+});
+
+// 文章新建界面
+app.get('/article/new', requireLoginPage, requirePermission('can_manage_articles'), async (req, res) => {
+	res.status(404).send(JSON.stringify(
+		{
+			status: 'N',
+			"error": "Route not found"
+		}
+	));
+	//not implemented yet
+});
+
+app.get('/problem/:id/solution', requireLoginPage, async (req, res) => {
+	res.status(404).send(JSON.stringify(
+		{
+			status: 'N',
+			"error": "Route not found"
+		}
+	));
+	//not implemented yet
+});
+	
 // 讨论列表
 app.get('/discussions', requireLoginPage, async (req, res) => {
 	let page = 1;
@@ -572,7 +640,7 @@ app.get('/discussion-detail/:cid', requireLoginPage, async (req, res) => {
 });
 
 // 提交列表
-app.get('/record/list', requireLoginPage, requireLoginPage, async (req, res) => {
+app.get('/record/list', requireLoginPage, async (req, res) => {
 	let page = 1;
 	if (req.query.page !== undefined) {
 		const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
@@ -841,7 +909,7 @@ app.get('/profile/:username', requireLoginPage, async (req, res) => {
 });
 
 // 编辑个人主页（需要登录）
-app.get('/profile-edit', requireLogin, async (req, res) => {
+app.get('/profile-edit', requireLoginPage, async (req, res) => {
 	const isAdmin = await checkAdmin(req);
 	const nav = isAdmin ? navigationAdmin : navigation;
 	res.render('profile-edit', { navigation: nav, user: req.user });
@@ -946,66 +1014,3 @@ ensureDirs().then(() => {
 		console.log(`Server running on http://0.0.0.0:${appPort}`);
 	});
 });
-
-/*
-## 标注汇总
-
-### 需要对接中间件的页面路由（P0）
-
-| 路由 | 标注位置 | 需要的数据 |
-|------|---------|-----------|
-| `/problem/list` | 替换 `pool.query` | 分页题目列表（id, title） |
-| `/problem/me` | 替换 `pool.query` | 当前用户创建的题目列表 |
-| `/problem/:id` | 替换 `pool.query` | 完整题目详情 + 作者信息 |
-| `/problem/edit/:id` | 替换 `pool.query` | 完整题目详情（编辑用） |
-| `/record/list` | 替换 `pool.query` | 分页提交记录（含状态、用户、题目信息） |
-| `/record/:rid` | 替换 `pool.query` | 提交详情 + 测试点结果 + 代码 |
-| `/contests` | 替换 `pool.query` | 分页比赛列表 |
-| `/contest/:id` | 替换 `pool.query` | 比赛详情 + 题目 + 排名 |
-
-### 独立保留模块（无需修改）
-
-| 路由 | 状态 | 说明 |
-|------|------|------|
-| `/discussions` | 独立保留 | 讨论区列表 |
-| `/discussion-detail/:cid` | 独立保留 | 讨论详情 |
-| `/chat` | 独立保留 | 私信页面 |
-| `/profile/:username` | 混合 | 用户信息从中间件获取，Markdown 本地存储 |
-| `/profile-edit` | 独立保留 | 个人主页编辑 |
-
-### 需要移除的组件
-
-| 组件 | 位置 | 原因 |
-|------|------|------|
-| `updateContestSubmission` | 第 632-656 行 | 比赛排名由 `conmng` 接管 |
-| `startFinalizer` | 第 658-679 行 | 结果聚合由 `recmng` 接管 |
-| `pool.query` 在 IP 封禁中 | 第 60-110 行 | 独立模块，但可保留（Web 层） |
-
-### 需要修改的页面路由（EJS 渲染）
-
-以下是所有 `res.render()` 调用及其依赖的数据：
-
-| 路由 | EJS 模板 | 数据来源（改造后） |
-|------|---------|-------------------|
-| `/` | `index.ejs` | 中间件统计 API |
-| `/problem/list` | `problemlist.ejs` | 中间件题目列表 |
-| `/problem/new` | `problem-new.ejs` | 通过编号申请和题目更新接口创建 |
-| `/problem/me` | `problemlist.ejs` | 中间件题目列表（按作者） |
-| `/problem/:id` | `problem.ejs` | 中间件题目详情 |
-| `/problem/edit/:id` | `problem-edit.ejs` | 中间件题目详情 |
-| `/discussions` | `discussions.ejs` | 本地数据库 |
-| `/discussion-detail/:cid` | `discussion-detail.ejs` | 本地数据库 |
-| `/record/list` | `submissionlist.ejs` | 中间件记录列表 |
-| `/record/:rid` | `status.ejs` | 中间件记录详情 |
-| `/contests` | `contests.ejs` | 中间件比赛列表 |
-| `/contest/:id` | `contest.ejs` | 中间件比赛详情 |
-| `/profile/:username` | `profile.ejs` | 本地数据库（用户信息从中间件） |
-| `/profile-edit` | `profile-edit.ejs` | 无数据依赖 |
-| `/chat` | `chat.ejs` | 本地数据库 |
-| `/settings` | `settings.ejs` | 无数据依赖（用户信息由前端获取） |
-| `/login` | `login.ejs` | 无数据依赖 |
-| `/register` | `register.ejs` | 无数据依赖 |
-| `/admin` | `admin.ejs` | 无数据依赖 |
-
-注意：和上一次 commit 之间的所有 diff 都需要进一步 code review！
-*/

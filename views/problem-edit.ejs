@@ -230,7 +230,7 @@ const markdownFields = ['background', 'description', 'inputfmt', 'outputfmt', 'h
 
 		try {
 			const response = await fetch('/api/problem/edit/<%= problem ? problem.id : "" %>', {
-				method: 'PUT',
+				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			});

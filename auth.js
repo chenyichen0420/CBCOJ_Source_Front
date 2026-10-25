@@ -1,4 +1,3 @@
-const { permission } = require('node:process');
 const pool = require('./db');
 const { packParams, parsePack } = require('./db');
 const logger = require('./logger');
@@ -81,13 +80,13 @@ async function getUserByCookie(cookie) {
  *   can_manage_users: boolean,
  *   can_manage_problems: boolean,
  *   can_manage_contests: boolean,
- *   can_manage_disk: boolean,
  *   can_manage_chat: boolean,
+ *	 can_manage_articles: boolean,
  *   can_submit_code: boolean,
  *   can_create_discussion: boolean,
  *   can_reply_discussion: boolean,
  *   can_post_message: boolean,
- *   can_view_others_submissions: boolean
+ *   can_view_others_submissions: boolean,
  * }>}
  */
 async function getUserPermissions(userId) {
@@ -98,8 +97,8 @@ async function getUserPermissions(userId) {
 			can_manage_users: false,
 			can_manage_problems: false,
 			can_manage_contests: false,
-			can_manage_disk: false,
 			can_manage_chat: false,
+            can_manage_articles: false,
 			can_submit_code: false,
 			can_create_discussion: false,
 			can_reply_discussion: false,
@@ -116,8 +115,8 @@ async function getUserPermissions(userId) {
 			can_manage_users: true,
 			can_manage_problems: true,
 			can_manage_contests: true,
-			can_manage_disk: true,
 			can_manage_chat: true,
+			can_manage_articles: true,
 			can_submit_code: !(lock1 & 0x03),
 			can_create_discussion: true,
 			can_reply_discussion: true,
@@ -130,8 +129,8 @@ async function getUserPermissions(userId) {
 		can_manage_users: !!(admin1 & 0x02),      // ADMIN_USER
 		can_manage_problems: !!(admin1 & 0x04),   // ADMIN_PROBLEM
 		can_manage_contests: !!(admin1 & 0x08),   // ADMIN_CONTEST
-		can_manage_disk: !!(admin1 & 0x20),       // ADMIN_FILE
 		can_manage_chat: !!(admin1 & 0x10),       // ADMIN_CHAT
+		can_manage_articles: !!(admin1 & 0x40),    // ADMIN_ARTICLE
 		can_submit_code: !(lock1 & 0x03),         // LOCK_USER_BANNED | LOCK_NO_SUBMIT
 		can_create_discussion: !(lock1 & 0x04),   // LOCK_NO_DISCUSSION
 		can_reply_discussion: !(lock1 & 0x04),    // same
@@ -152,18 +151,14 @@ async function checkPermission(userId, permission) {
 
 	const { admin1, lock1 } = flags;
 
-	if (permission === 'can_submit_code') return !(lock1 & 0x03);
-	if (permission === 'can_view_others_submissions') return !(lock1 & 0x11);
-
-	// 超级管理员拥有其他管理权限，但不能覆盖提交/查看记录的锁定位。
 	if (admin1 & 0x01) return true;
 
 	switch (permission) {
 		case 'can_manage_users':    return !!(admin1 & 0x02);
 		case 'can_manage_problems': return !!(admin1 & 0x04);
 		case 'can_manage_contests': return !!(admin1 & 0x08);
-		case 'can_manage_disk':     return !!(admin1 & 0x20);
-		case 'can_manage_chat':     return !!(admin1 & 0x10);
+		case 'can_manage_chat': return !!(admin1 & 0x10);
+		case 'can_manage_articles': return !!(admin1 & 0x40);
 		case 'can_submit_code':     return !(lock1 & 0x03);
 		case 'can_create_discussion': return !(lock1 & 0x04);
 		case 'can_reply_discussion':  return !(lock1 & 0x04);
@@ -176,16 +171,7 @@ async function checkPermission(userId, permission) {
 }
 
 async function requireLogin(req, res, next) {
-	let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-	if (req.headers.cookie && !cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) {
-			cookie = decodeURIComponent(match[1]);
-		}
-	}
-	const user = await getUserByCookie(cookie);
-	if (!user) return res.status(401).json({ status: 'N', error: '请先登录' });
-	req.user = user;
+	if (!req.user) return res.status(401).json({ status: 'N', error: '请先登录' });
 	next();
 }
 
@@ -196,17 +182,8 @@ async function requireLoginPage(req, res, next) {
 }
 
 async function checkAdmin(req) {
-	let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-	if (req.headers.cookie && !cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) {
-			cookie = decodeURIComponent(match[1]);
-		}
-	}
-	if (!cookie) return false;
-	const user = await getUserByCookie(cookie);
-	if (!user) return false;
-	return (user.role === 'admin' || user.role === 'superadmin');
+	if (!req.user) return false;
+	return (req.user.role === 'admin' || req.user.role === 'superadmin');
 }
 
 async function requireAdmin(req, res, next) {
@@ -225,32 +202,18 @@ function requireSuperAdmin(req, res, next) {
 
 function requirePermission(permission) {
 	return async (req, res, next) => {
-		var cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-		if (req.headers.cookie && !cookie) {
-			const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-			if (match) {
-				cookie = decodeURIComponent(match[1]);
-			}
-		}
-		const user = await getUserByCookie(cookie);
-		if (!user) {
+		if (!req.user) {
 			return res.status(401).json({ status: 'N', error: '请先登录' });
 		}
-		const hasPerm = await checkPermission(user.id, permission);
+		const hasPerm = await checkPermission(req.user.id, permission);
 		if (!hasPerm) {
 			return res.status(403).json({ status: 'N', error: '权限不足' });
 		}
-		req.user = user;
 		next();
 	};
 }
 
 async function optionalAuth(req, res, next) {
-	const cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-	if (cookie) {
-		const user = await getUserByCookie(cookie);
-		if (user) req.user = user;
-	}
 	next();
 }
 

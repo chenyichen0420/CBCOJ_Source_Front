@@ -95,8 +95,8 @@ const MAX_SUBTASKS = 100;
 const MAX_CASES_PER_SUBTASK = 1000;
 const MAX_TOTAL_CASES = 100000;
 const MAX_CASE_NAME_LEN = 50;
-const MAX_TIME_LIMIT_MS = 30000;         // 30s
-const MAX_MEMORY_LIMIT_MB = 2 * 1024;     // 2GiB
+const MAX_TIME_LIMIT_MS = 30000;
+const MAX_MEMORY_LIMIT_MB = 2 * 1024;
 const MAX_SCORE_PER_SUBTASK = 1000000;
 
 function parsePositiveInt(token, label) {
@@ -131,7 +131,6 @@ function isValidCaseStem(name) {
 	return true;
 }
 
-// 按 main 的 >> 语义逐 token 解析并校验
 function parseAndValidateSetFile(setData) {
 	let text = Buffer.isBuffer(setData) ? setData.toString('utf8') : String(setData ?? '');
 	if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);   // 去 BOM
@@ -534,53 +533,6 @@ async function updateProblem(req, id) {
 	return { ok: true };
 }
 
-router.get('/problems', requirePermission('can_manage_problems'), async (req, res) => {
-	let page = Number(req.query.page || 1);
-	let limit = Number(req.query.limit || 20);
-	const pageErr = validateInt(page, { positive: true });
-	const limitErr = validateInt(limit, { positive: true, min: 1 });
-	if (pageErr) return res.status(400).json({ status: 'N', error: `page: ${pageErr}` });
-	if (limitErr) return res.status(400).json({ status: 'N', error: `limit: ${limitErr}` });
-	try {
-		const result = await listProblems((page - 1) * limit + 1, limit);
-		res.json({ status: 'Y', ...result, page, totalPages: Math.ceil(result.total / limit) });
-	} catch (err) {
-		res.status(502).json({ status: 'N', error: '题目列表获取失败' });
-	}
-});
-
-router.get('/problems/all', requirePermission('can_manage_problems'), async (req, res) => {
-	try {
-		const result = await listProblems(0, 0xFFFFFF);
-		res.json({ status: 'Y', problems: result.problems.map(({ id, title }) => ({ id, title })) });
-	} catch (err) {
-		res.status(502).json({ status: 'N', error: '题目列表获取失败' });
-	}
-});
-
-router.get('/problem/:id', requirePermission('can_manage_problems'), async (req, res) => {
-	const idErr = validateString(req.params.id, { minLen: 1, maxLen: 50 });
-	if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
-	try {
-		const problem = await readProblem(req.params.id);
-		if (!problem) return res.status(404).json({ status: 'N', error: '题目不存在' });
-		delete problem._statement;
-		res.json({ status: 'Y', ...problem, edit_url: `/problem/edit/${problem.id}` });
-	} catch (err) {
-		res.status(502).json({ status: 'N', error: '题目信息获取失败' });
-	}
-});
-
-router.put('/problem/edit/:id', requirePermission('can_manage_problems'), async (req, res) => {
-	try {
-		const result = await updateProblem(req, req.params.id);
-		if (!result.ok) return res.status(result.status).json({ status: 'N', error: result.error });
-		res.json({ status: 'Y' });
-	} catch (err) {
-		res.status(502).json({ status: 'N', error: '题目更新失败' });
-	}
-});
-
 async function createProblem(req, res) {
 	const titleErr = validateString(req.body?.title, { minLen: 1, maxLen: 200 });
 	if (titleErr) return res.status(400).json({ status: 'N', error: `title: ${titleErr}` });
@@ -630,60 +582,132 @@ async function createProblem(req, res) {
 	}
 }
 
-router.post('/problem/new', requirePermission('can_manage_problems'), createProblem);
-router.post('/problem', requirePermission('can_manage_problems'), createProblem);
+// 获取题目列表
+router.get('/problems', requirePermission('can_manage_problems'), async (req, res) => {
+	let page = Number(req.query.page || 1);
+	let limit = Number(req.query.limit || 20);
+	const pageErr = validateInt(page, { positive: true });
+	const limitErr = validateInt(limit, { positive: true, min: 1 });
+	if (pageErr) return res.status(400).json({ status: 'N', error: `page: ${pageErr}` });
+	if (limitErr) return res.status(400).json({ status: 'N', error: `limit: ${limitErr}` });
+	try {
+		const result = await listProblems((page - 1) * limit + 1, limit);
+		res.json({ status: 'Y', ...result, page, totalPages: Math.ceil(result.total / limit) });
+	} catch (err) {
+		res.status(502).json({ status: 'N', error: '题目列表获取失败' });
+	}
+});
 
+// 直接获取完整题目列表（简单信息）
+router.get('/problems/all', requirePermission('can_manage_problems'), async (req, res) => {
+	try {
+		const result = await listProblems(0, 0xFFFFFF);
+		res.json({ status: 'Y', problems: result.problems.map(({ id, title }) => ({ id, title })) });
+	} catch (err) {
+		res.status(502).json({ status: 'N', error: '题目列表获取失败' });
+	}
+});
+
+// 直接获取单个题目完整信息
+router.get('/problem/:id', requirePermission('can_manage_problems'), async (req, res) => {
+	const idErr = validateString(req.params.id, { minLen: 1, maxLen: 50 });
+	if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
+	try {
+		const problem = await readProblem(req.params.id);
+		if (!problem) return res.status(404).json({ status: 'N', error: '题目不存在' });
+		delete problem._statement;
+		res.json({ status: 'Y', ...problem, edit_url: `/problem/edit/${problem.id}` });
+	} catch (err) {
+		res.status(502).json({ status: 'N', error: '题目信息获取失败' });
+	}
+});
+
+// 编辑题目信息
+router.post('/problem/edit/:id', requirePermission('can_manage_problems'), async (req, res) => {
+	try {
+		const result = await updateProblem(req, req.params.id);
+		if (!result.ok) return res.status(result.status).json({ status: 'N', error: result.error });
+		res.json({ status: 'Y' });
+	} catch (err) {
+		res.status(502).json({ status: 'N', error: '题目更新失败' });
+	}
+});
+
+// 新建题目
+router.post('/problem/new', requirePermission('can_manage_problems'), createProblem);
+
+// 上传题目数据
 router.post('/problem/:id/upload-data', requirePermission('can_manage_problems'), uploadProblemData);
 
 // 暂不支持：当前 JudgeSession 没有删除、精选或检查器接口。
 // 新建题目通过 JudgeSession 的编号申请和题目更新接口完成。
 const unsupportedProblemRoutes = [
-	['delete', '/problem/:id'],
-	['post', '/problem/:id/upload-checker'],
-	['put', '/problem/:id/select']
+	['delete', '/problem/:id']
 ];
-
 for (const [method, route] of unsupportedProblemRoutes) {
 	router[method](route, requirePermission('can_manage_problems'), (req, res) => {
 		res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
 	});
 }
 
-// 暂不支持：用户管理、比赛管理、审计日志和 IP 封禁仍依赖原 MySQL 表或未迁移的接口。
-// 迁移目标：补齐对应 middleware API 后，迁移 lzjver/routes/admin.js 的以下接口。
+// 直接获取单个文章的完整信息
+router.get('/article/:id', requirePermission('can_manage_articles'), async (req, res) => {
+	res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 编辑文章信息
+router.post('/article/edit/:id', requirePermission('can_manage_articles'), async (req, res) => {
+	res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 新建文章
+router.post('/article/new', requirePermission('can_manage_articles'), async (req, res) => {
+    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 获取用户列表
+router.get('/user/list', requirePermission('can_manage_users'), async (req, res) => {
+	res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 获取单个用户完整信息
+router.get('/user/:id', requirePermission('can_manage_users'), async (req, res) => {
+    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 调整用户荣誉 tag
+router.post('/user/:id/badge', requireAdmin, async (req, res) => {
+    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 调整用户一般权限
+router.post('/user/:id/adjperm', requirePermission('can_manage_users'), async (req, res) => {
+    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 调整用户管理员权限
+router.post('/user/:id/adjadmin', requireSuperAdmin, async (req, res) => {
+    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 重置用户密码
+router.post('/user/:id/reset-password', requireSuperAdmin, async (req, res) => {
+    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
 const unsupportedAdminRoutes = [
-	['/users', 'get'],
-	['/user/permissions', 'post'],
-	['/user/:id/reset-password', 'post'],
-	['/user/:id/role', 'put'],
-	['/user/:id/badge', 'put'],
 	['/contests', 'get'],
 	['/contests', 'post'],
 	['/contests/:id', 'get'],
 	['/contests/:id', 'put'],
 	['/contests/:id', 'delete'],
 	['/contests/:id/problems', 'get'],
-	['/logs', 'get'],
-	['/ban-ip', 'post'],
-	['/banned-ips', 'get'],
-	['/ban-ip/:ip', 'delete'],
-	['/clear-ip-logs', 'post']
+	['/logs', 'get']
 ];
-
 for (const [route, method] of unsupportedAdminRoutes) {
 	router[method](route, (req, res) => {
-		res.status(501).json({ status: 'N', error: '该管理功能尚未迁移：需要 middleware 对应接口' });
+		res.status(501).json({ status: 'N', error: '该管理功能尚未迁移' });
 	});
 }
 
-/*
- * 需要后续修改的函数/接口：
- * - 用户权限、密码、角色和徽章管理：需要 Account 管理协议。
- * - 题目新建、删除、精选、数据包和检查器上传：需要 Judge/Update 协议。
- * - 比赛及比赛题目管理：需要 Contest 协议。
- * - 管理日志、IP 封禁和日志清理：需要安全审计协议。
- */
-
 module.exports = router;
-
-//注意：暂时没有进行任何 code review！

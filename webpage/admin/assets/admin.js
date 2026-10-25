@@ -3,7 +3,6 @@
 
 let currentUserPerms = {};         // 当前登录用户的管理权限
 let currentUser = null;            // 当前用户基本信息
-let permissionFields = [];         // 所有可配置的权限字段（用于用户管理）
 
 // 简易模态对话框（替代原生 prompt/confirm/alert），带模糊背景
 function createModal(html) {
@@ -40,7 +39,7 @@ async function loadBans() {
 	container.innerHTML = '';
 	try {
 		const cookie = getcookie();
-		const resp = await fetch(`${BASE_URL}/api/admin/banned-ips?cookie=${cookie}`);
+		const resp = await fetch(`${BASE_URL}/api/banned-ips?cookie=${cookie}`);
 		const data = await resp.json();
 		if (data.status !== 'Y') throw new Error(data.error || '查询失败');
 		loading.style.display = 'none';
@@ -57,7 +56,7 @@ async function loadBans() {
 				if (!(await modalConfirm('确定解除封禁 ' + ip + ' ?'))) return;
 				const cookie = getcookie();
 				try {
-					const resp = await fetch(`${BASE_URL}/api/admin/ban-ip/${encodeURIComponent(ip)}?cookie=${cookie}`, { method: 'DELETE' });
+					const resp = await fetch(`${BASE_URL}/api/ban-ip/${encodeURIComponent(ip)}?cookie=${cookie}`, { method: 'DELETE' });
 					const j = await resp.json();
 					if (j.status === 'Y') { await modalAlert('已解除封禁'); loadBans(); } else await modalAlert('解除失败: ' + (j.error||''));
 				} catch (e) { await modalAlert('请求失败: ' + e.message); }
@@ -257,7 +256,7 @@ function renderAdminUI() {
 			if (!ip) { await modalAlert('请输入 IP'); return; }
 			const cookie = getcookie();
 			try {
-				const resp = await fetch(`${BASE_URL}/api/admin/ban-ip?cookie=${cookie}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ip, reason }) });
+				const resp = await fetch(`${BASE_URL}/api/ban-ip?cookie=${cookie}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ip, reason }) });
 				const j = await resp.json();
 				if (j.status === 'Y') { await modalAlert('封禁成功'); loadBans(); } else await modalAlert('封禁失败: ' + (j.error||''));
 			} catch (e) { await modalAlert('请求失败: ' + e.message); }
@@ -270,7 +269,7 @@ function renderAdminUI() {
 			if (!(await modalConfirm('确定清除该 IP 的访问记录吗？此操作将删除访问与安全日志')) ) return;
 			const cookie = getcookie();
 			try {
-				const resp = await fetch(`${BASE_URL}/api/admin/clear-ip-logs?cookie=${cookie}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ip }) });
+				const resp = await fetch(`${BASE_URL}/api/clear-ip-logs?cookie=${cookie}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ip }) });
 				const j = await resp.json();
 				if (j.status === 'Y') await modalAlert('已删除条目数: ' + (j.deleted||0)); else await modalAlert('删除失败: ' + (j.error||''));
 			} catch (e) { await modalAlert('请求失败: ' + e.message); }
@@ -296,7 +295,7 @@ async function loadLogs(page) {
 	container.innerHTML = '';
 	try {
 		const cookie = getcookie();
-		const url = `${BASE_URL}/api/admin/logs?type=${encodeURIComponent(type)}&page=${page}&limit=${limit}&q=${encodeURIComponent(q)}&cookie=${cookie}`;
+		const url = `${BASE_URL}/api/logs?type=${encodeURIComponent(type)}&page=${page}&limit=${limit}&q=${encodeURIComponent(q)}&cookie=${cookie}`;
 		const resp = await fetch(url);
 		const data = await resp.json();
 		if (data.status !== 'Y') throw new Error(data.error || '查询失败');
@@ -352,229 +351,104 @@ async function loadLogs(page) {
 }
 
 // ===================== 用户管理 =====================
-let allUsersList = []; // 全局缓存用户列表，用于权限弹窗
+let currentUserPage = 1;
+const userLimit = 10;
+const permissionFields = [
+	{ key: 'ADMIN_USER', label: '用户管理', kind: 'admin' },
+	{ key: 'ADMIN_PROBLEM', label: '题目管理', kind: 'admin' },
+	{ key: 'ADMIN_CONTEST', label: '比赛管理', kind: 'admin' },
+	{ key: 'ADMIN_CHAT', label: '聊天管理', kind: 'admin' },
+	{ key: 'ADMIN_ARTICLE', label: '文章管理', kind: 'admin' },
+	{ key: 'LOCK_NO_SUBMIT', label: '禁止提交', kind: 'lock' },
+	{ key: 'LOCK_NO_DISCUSSION', label: '禁止讨论', kind: 'lock' },
+	{ key: 'LOCK_NO_CHAT', label: '禁止聊天', kind: 'lock' },
+	{ key: 'LOCK_NO_VIEW_RECORD', label: '禁止查看他人评测', kind: 'lock' },
+	{ key: 'LOCK_NO_OPEN_RECORD', label: '禁止公开评测', kind: 'lock' },
+	{ key: 'LOCK_USER_BANNED', label: '封禁用户', kind: 'ban' }
+];
+const userApi = (id, action = '') => `${BASE_URL}/api/user/${id}${action ? `/${action}` : ''}`;
 
-async function loadUsers() {
+async function loadUsers(page = 1) {
+	currentUserPage = page;
 	const cookie = getcookie();
 	try {
-		const resp = await fetch(`${BASE_URL}/api/admin/users?cookie=${cookie}`);
+		const resp = await fetch(`${BASE_URL}/api/users?cookie=${cookie}&page=${page}`);
 		const data = await resp.json();
-		if (data.status !== 'Y') throw new Error(data.error);
-		// 动态提取权限字段（除去基本信息）
-		if (data.users && data.users.length > 0) {
-			const sampleUser = data.users[0];
-			permissionFields = Object.keys(sampleUser).filter(key =>
-				key.startsWith('can_')
-			);
-		}
-		allUsersList = data.users; // 保存到全局
-		renderUsersTable(data.users);
+		if (!resp.ok || data.status !== 'Y') throw new Error(data.error || `用户列表请求失败 (${resp.status})`);
+		renderUsersTable(data.users, data.totalPages, data.page);
 	} catch (err) {
-		document.getElementById('users-loading').innerHTML = `<p class="error">加载失败: ${err.message}</p>`;
+		console.error('loadUsers failed:', err);
+		document.getElementById('users-loading').innerHTML = `<p class="error">加载失败: ${escapeHtml(err.message)}</p>`;
 	}
 }
 
-function renderUsersTable(users) {
+function renderUsersTable(users, totalPages, page) {
 	document.getElementById('users-loading').style.display = 'none';
 	const container = document.getElementById('users-table-container');
 	container.style.display = 'block';
-
-	// 分为 管理员 列表 与 普通用户 列表 以便更清晰的管理
-	const admins = users.filter(u => u.role === 'admin' || u.role === 'superadmin');
-	const normal = users.filter(u => !u.role || (u.role !== 'admin' && u.role !== 'superadmin'));
-
-	const makeTable = (arr) => {
-		let html = '<table class="permission-table"><thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>操作</th></tr></thead><tbody>';
-		arr.forEach(user => {
-			html += '<tr>';
-			html += `<td>${user.id}</td>`;
-			html += `<td>${escapeHtml(user.username)}${user.badge?` <span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;">${escapeHtml(user.badge)}</span>`:''}</td>`;
-			html += `<td class="role-cell" data-user-id="${user.id}" data-role="${user.role || 'user'}">${user.role || 'user'}</td>`;
-			html += `<td class="action-buttons">
-						<button class="btn-sm btn-warning reset-pwd" data-user="${user.id}" data-username="${escapeAttr(user.username)}" style="width: 20%">重置密码</button>
-						<button class="btn-sm btn-primary manage-perms" data-user-id="${user.id}" style="width: 20%">管理权限</button>`;
-			if (currentUser && currentUser.role === 'superadmin') {
-				html += ` <button class="btn-sm btn-secondary change-role" data-user="${user.id}" data-current-role="${user.role || 'user'}" style="width: 20%">修改角色</button>`;
-				html += ` <button class="btn-sm btn-info edit-badge" data-user-id="${user.id}" style="width: 20%">编辑Badge</button>`;
-			}
-			html += `</td>`;
-			html += '</tr>';
+	let html = '<div style="overflow-x:auto"><table class="permission-table"><thead><tr><th>ID</th><th>用户名</th><th>角色</th>';
+	permissionFields.forEach(field => { html += `<th>${field.label}</th>`; });
+	html += '</tr></thead><tbody>';
+	users.forEach(user => {
+		html += `<tr data-user-id="${user.id}"><td class="user-id">${user.id}</td><td class="user-name">${escapeHtml(user.username)}</td><td class="user-role">${escapeHtml(user.role || 'user')}</td>`;
+		permissionFields.forEach(field => {
+			const canEdit = field.kind === 'admin' || field.kind === 'ban'
+				? currentUser && currentUser.role === 'superadmin'
+				: true;
+			const checked = user.permissions && user.permissions[field.key] ? ' checked' : '';
+			html += `<td><input type="checkbox" class="user-permission" data-user-id="${user.id}" data-permission="${field.key}"${checked}${canEdit ? '' : ' disabled'}></td>`;
 		});
-		html += '</tbody></table>';
-		return html;
-	};
-
-	let html = '';
-	html += '<h3>管理员列表</h3>' + (admins.length ? makeTable(admins) : '<p class="text-secondary">暂无管理员</p>');
-	html += '<h3 style="margin-top:16px;">普通用户列表</h3>' + (normal.length ? makeTable(normal) : '<p class="text-secondary">暂无普通用户</p>');
+		html += '</tr>';
+	});
+	html += '</tbody></table></div><div id="users-pagination" class="pagination">';
+	for (let i = 1; i <= totalPages; i++) {
+		html += `<button class="page-btn ${i === page ? 'active' : ''}" data-page="${i}">${i}</button>`;
+	}
+	html += '</div>';
 	container.innerHTML = html;
-
-	// 重置密码按钮事件（保持不变）
-	document.querySelectorAll('.reset-pwd').forEach(btn => {
-		btn.addEventListener('click', async (e) => {
-			const userId = e.target.dataset.user;
-			const username = e.target.dataset.username;
-			const newPassword = await modalPrompt(`请输入用户 "${username}" 的新密码（至少6位）:`);
-			if (!newPassword) return;
-			if (newPassword.length < 6) {
-				await modalAlert('密码长度至少6位');
-				return;
-			}
-			const confirmPwd = await modalPrompt('请再次输入新密码确认:');
-			if (newPassword !== confirmPwd) {
-				await modalAlert('两次输入的密码不一致');
-				return;
-			}
-			const cookie = getcookie();
-			try {
-				const resp = await fetch(`${BASE_URL}/api/admin/user/${userId}/reset-password?cookie=${cookie}`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ newPassword })
-				});
-				const data = await resp.json();
-				await modalAlert(data.status === 'Y' ? '密码重置成功' : '重置失败: ' + data.error);
-				if (data.status === 'Y') loadUsers();
-			} catch (err) {
-				await modalAlert('请求失败: ' + err.message);
-			}
-		});
+	document.querySelectorAll('#users-pagination .page-btn').forEach(btn => {
+		btn.addEventListener('click', () => loadUsers(parseInt(btn.dataset.page, 10)));
 	});
-
-	// 修改角色按钮事件（保持不变）
-	document.querySelectorAll('.change-role').forEach(btn => {
-		btn.addEventListener('click', async (e) => {
-			const userId = e.target.dataset.user;
-			const currentRole = e.target.dataset.currentRole;
-			const newRole = await modalPrompt(`当前角色: ${currentRole}\n请输入新角色:`, currentRole);
-			if (!newRole) return;
-			const cookie = getcookie();
-			try {
-				const resp = await fetch(`${BASE_URL}/api/admin/user/${userId}/role?cookie=${cookie}`, {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ role: newRole })
-				});
-				const data = await resp.json();
-				await modalAlert(data.status === 'Y' ? '角色修改成功' : '修改失败: ' + data.error);
-				if (data.status === 'Y') loadUsers();
-			} catch (err) {
-				await modalAlert('请求失败: ' + err.message);
-			}
-		});
-	});
-
-	// 新增：管理权限按钮事件
-	document.querySelectorAll('.manage-perms').forEach(btn => {
-		btn.addEventListener('click', (e) => {
-			const userId = parseInt(e.target.dataset.userId);
-			manageUserPermissions(userId);
-		});
-	});
-
-	// 编辑 badge 按钮事件（仅 superadmin 可见）
-	document.querySelectorAll('.edit-badge').forEach(btn => {
-		btn.addEventListener('click', async (e) => {
-			const userId = parseInt(e.target.dataset.userId);
-			const current = allUsersList.find(u => u.id === userId) || {};
-			const badge = await modalPrompt('请输入 badge 文本（留空则清除）:', current.badge || '');
-			if (badge === null) return;
-			const color = await modalPrompt('名称颜色（CSS 颜色，如 #ff0000，留空使用默认）:', current.name_color || '');
-			const cookie = getcookie();
-			try {
-				const resp = await fetch(`${BASE_URL}/api/admin/user/${userId}/badge?cookie=${cookie}`, {
-					method: 'PUT', headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ badge: badge || null, name_color: color || null })
-				});
-				const data = await resp.json();
-				if (data.status === 'Y') { await modalAlert('更新成功'); loadUsers(); }
-				else await modalAlert('更新失败: ' + data.error);
-			} catch (err) { await modalAlert('请求失败: ' + err.message); }
-		});
+	document.querySelectorAll('.user-permission').forEach(checkbox => {
+		checkbox.addEventListener('change', () => updateUserPermission(checkbox));
 	});
 }
 
-async function manageUserPermissions(userId) {
-	// 从全局缓存中获取该用户数据
-	const user = allUsersList.find(u => u.id === userId);
-	if (!user) {
-		await modalAlert('未找到用户数据，请刷新页面重试');
-		return;
+async function refreshUserInfo(userId) {
+	const resp = await fetch(`${userApi(userId)}?cookie=${getcookie()}`);
+	const data = await resp.json();
+	if (!resp.ok || data.status !== 'Y' || !data.user) {
+		throw new Error(data.error || `用户信息刷新失败 (${resp.status})`);
 	}
-
-	// 如果没有权限字段，尝试重新从列表获取（防御）
-	if (!permissionFields.length && allUsersList.length) {
-		const sampleUser = allUsersList[0];
-		permissionFields = Object.keys(sampleUser).filter(key => key.startsWith('can_'));
-	}
-
-	// 构建权限复选框 HTML（网格布局）
-	let permsHtml = '';
-	permissionFields.forEach(field => {
-		const displayName = field.replace(/^can_/, '').replace(/_/g, ' ');
-		const isChecked = user[field] == 1;
-		permsHtml += `
-			<label class="perm-checkbox-label">
-				<input type="checkbox" class="perm-checkbox" data-perm="${field}" ${isChecked ? 'checked' : ''}>
-				${displayName}
-			</label>
-		`;
+	const row = document.querySelector(`tr[data-user-id="${CSS.escape(String(userId))}"]`);
+	if (!row) return;
+	row.querySelector('.user-name').textContent = data.user.username;
+	row.querySelector('.user-role').textContent = data.user.role || 'user';
+	row.querySelectorAll('.user-permission').forEach(checkbox => {
+		checkbox.checked = !!data.user.permissions?.[checkbox.dataset.permission];
 	});
+}
 
-	// 创建模态框
-	const modal = document.createElement('div');
-	modal.className = 'modal';
-	modal.innerHTML = `
-		<div class="modal-content" style="max-width: 600px;">
-			<h3>管理用户权限 - ${escapeHtml(user.username)}</h3>
-			<div class="perms-grid">
-				${permsHtml || '<p>未发现可配置权限字段</p>'}
-			</div>
-			<div class="modal-actions" style="margin-top: 20px;">
-				<button class="btn" id="cancel-perms-modal">取消</button>
-				<button class="btn btn-primary" id="save-perms-modal">保存权限</button>
-			</div>
-		</div>
-	`;
-
-	document.body.appendChild(modal);
-
-	// 关闭模态框
-	const closeModal = () => {
-		if (document.body.contains(modal)) document.body.removeChild(modal);
-	};
-	document.getElementById('cancel-perms-modal').addEventListener('click', closeModal);
-	modal.addEventListener('click', (e) => {
-		if (e.target === modal) closeModal();
-	});
-
-	// 保存权限
-	document.getElementById('save-perms-modal').addEventListener('click', async () => {
-		const checkboxes = modal.querySelectorAll('.perm-checkbox');
-		const permissions = {};
-		checkboxes.forEach(cb => {
-			permissions[cb.dataset.perm] = cb.checked ? 1 : 0;
+async function updateUserPermission(checkbox) {
+	const previous = !checkbox.checked;
+	checkbox.disabled = true;
+	const permission = checkbox.dataset.permission;
+	const endpoint = permission === 'LOCK_USER_BANNED' ? 'ban' :
+		permission.startsWith('ADMIN_') ? 'adjadmin' : 'adjperm';
+	try {
+		const resp = await fetch(`${userApi(checkbox.dataset.userId, endpoint)}?cookie=${getcookie()}`, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ permission, value: checkbox.checked ? 1 : 0 })
 		});
-
-		const cookie = getcookie();
-		try {
-			const resp = await fetch(`${BASE_URL}/api/admin/user/permissions?cookie=${cookie}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ userId, permissions })
-			});
-			const data = await resp.json();
-			if (data.status === 'Y') {
-				await modalAlert('权限更新成功');
-				closeModal();
-				loadUsers(); // 刷新列表
-			} else {
-				await modalAlert('更新失败: ' + data.error);
-			}
-		} catch (err) {
-			await modalAlert('请求失败: ' + err.message);
-		}
-	});
+		const data = await resp.json();
+		if (data.status !== 'Y') throw new Error(data.error || '权限更新失败');
+		await refreshUserInfo(checkbox.dataset.userId);
+	} catch (err) {
+		checkbox.checked = previous;
+		await modalAlert(err.message);
+	} finally {
+		checkbox.disabled = false;
+	}
 }
 
 // ===================== 题目管理 =====================
@@ -668,7 +542,7 @@ async function loadContests(page) {
 	currentContestPage = page;
 	const cookie = getcookie();
 	try {
-		const resp = await fetch(`${BASE_URL}/api/admin/contests?cookie=${cookie}&page=${page}&limit=${contestLimit}`);
+		const resp = await fetch(`${BASE_URL}/api/contests?cookie=${cookie}&page=${page}&limit=${contestLimit}`);
 		const data = await resp.json();
 		if (data.status !== 'Y') throw new Error(data.error);
 		renderContestsTable(data.contests, data.totalPages);
@@ -746,7 +620,7 @@ async function showContestModal(contest = null) {
 	if (contest && contest.id) {
 		const cookie = getcookie();
 		try {
-			const resp = await fetch(`${BASE_URL}/api/admin/contests/${contest.id}/problems?cookie=${cookie}`);
+			const resp = await fetch(`${BASE_URL}/api/contests/${contest.id}/problems?cookie=${cookie}`);
 			const data = await resp.json();
 			if (data.status === 'Y') selectedProblemIds = data.problem_ids;
 		} catch (e) {}
@@ -803,8 +677,8 @@ async function showContestModal(contest = null) {
 		}
 		const cookie = getcookie();
 		const url = contest ?
-			`${BASE_URL}/api/admin/contests/${contest.id}?cookie=${cookie}` :
-			`${BASE_URL}/api/admin/contests?cookie=${cookie}`;
+			`${BASE_URL}/api/contests/${contest.id}?cookie=${cookie}` :
+			`${BASE_URL}/api/contests?cookie=${cookie}`;
 		const method = contest ? 'PUT' : 'POST';
 		try {
 			const resp = await fetch(url, {
@@ -831,7 +705,7 @@ function showAddContestModal() { showContestModal(); }
 async function editContest(id) {
 	const cookie = getcookie();
 	try {
-		const resp = await fetch(`${BASE_URL}/api/admin/contests/${id}?cookie=${cookie}`);
+		const resp = await fetch(`${BASE_URL}/api/contests/${id}?cookie=${cookie}`);
 		const data = await resp.json();
 		if (data.status === 'Y') showContestModal(data);
 		else alert('获取比赛失败: ' + data.error);
@@ -844,7 +718,7 @@ async function deleteContest(id) {
 	if (!(await modalConfirm('确定删除该比赛吗？'))) return;
 	const cookie = getcookie();
 	try {
-		const resp = await fetch(`${BASE_URL}/api/admin/contests/${id}?cookie=${cookie}`, { method: 'DELETE' });
+		const resp = await fetch(`${BASE_URL}/api/contests/${id}?cookie=${cookie}`, { method: 'DELETE' });
 		const data = await resp.json();
 		if (data.status === 'Y') {
 			await modalAlert('删除成功');

@@ -7,7 +7,7 @@ const AdmZip = require('adm-zip');
 const multer = require('multer');
 const router = express.Router();
 const pool = require('../db');
-const { requirePermission } = require('../auth');
+const { requirePermission, requireAdmin, requireSuperAdmin } = require('../auth');
 const config = require('../config');
 const logger = require('../logger');
 const { validateInt, validateString } = require('../validation');
@@ -665,34 +665,134 @@ router.post('/article/new', requirePermission('can_manage_articles'), async (req
     res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
 });
 
-// 获取用户列表
-router.get('/user/list', requirePermission('can_manage_users'), async (req, res) => {
-	res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+// PLACE_HOLDER FOR USER MANAGE
+
+const userAdminPermissions = new Set([
+	'ADMIN_USER', 'ADMIN_PROBLEM', 'ADMIN_CONTEST', 'ADMIN_CHAT', 'ADMIN_ARTICLE'
+]);
+const userLockPermissions = new Set([
+	'LOCK_NO_SUBMIT', 'LOCK_NO_DISCUSSION', 'LOCK_NO_CHAT',
+	'LOCK_NO_VIEW_RECORD', 'LOCK_NO_OPEN_RECORD'
+]);
+const userBanPermission = 'LOCK_USER_BANNED';
+
+function parseUserId(value) {
+	const id = Number(value);
+	return Number.isInteger(id) && id >= 0 ? id : null;
+}
+
+async function accountRequest(command, params) {
+	const response = await pool.getAccount().send(command, pool.packParams(params));
+	if (response.command !== 'Y') {
+		const parts = pool.parsePack(response.data);
+		throw new Error(parts[0] ? parts[0].toString('utf8') : '账户服务请求失败');
+	}
+	return pool.parsePack(response.data);
+}
+
+async function getManagedUser(id) {
+	const parts = await accountRequest('U', [
+		'uid', String(id), 'uid', 'username', 'flag', 'role', 'badge', 'name_color'
+	]);
+	if (parts.length !== 6 || parts[2].length !== 6) throw new Error('账户服务返回数据无效');
+	const flag = parts[2];
+	const permissions = {};
+	for (const name of userAdminPermissions) permissions[name] = !!(flag[0] & {
+		ADMIN_USER: 0x02, ADMIN_PROBLEM: 0x04, ADMIN_CONTEST: 0x08,
+		ADMIN_CHAT: 0x10, ADMIN_ARTICLE: 0x40
+	}[name]);
+	for (const name of userLockPermissions) permissions[name] = !!(flag[2] & {
+		LOCK_NO_SUBMIT: 0x02, LOCK_NO_DISCUSSION: 0x04, LOCK_NO_CHAT: 0x08,
+		LOCK_NO_VIEW_RECORD: 0x10, LOCK_NO_OPEN_RECORD: 0x20
+	}[name]);
+	permissions[userBanPermission] = !!(flag[2] & 0x01);
+	return {
+		id: Number(parts[0].toString('utf8')),
+		username: parts[1].toString('utf8'),
+		role: parts[3].toString('utf8'),
+		badge: parts[4].toString('utf8'),
+		name_color: parts[5].toString('utf8'),
+		permissions
+	};
+}
+
+async function getUserCount() {
+	const parts = await accountRequest('S', []);
+	if (parts.length !== 5) throw new Error('统计信息返回数据无效');
+	const count = Number(parts[3].toString('utf8'));
+	if (!Number.isSafeInteger(count) || count < 0) throw new Error('用户数量无效');
+	return count;
+}
+
+router.get('/users', requirePermission('can_manage_users'), async (req, res) => {
+	const page = Number(req.query.page || 1);
+	const limit = 10;
+	if (!Number.isInteger(page) || page < 1) return res.status(400).json({ status: 'N', error: '页码无效' });
+	try {
+		const total = await getUserCount();
+		const start = (page - 1) * limit;
+		const ids = start < total ? Array.from({ length: Math.min(limit, total - start) }, (_, i) => start + i) : [];
+		const users = [];
+		for (const id of ids) users.push(await getManagedUser(id));
+		res.json({ status: 'Y', users, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) });
+	} catch (err) {
+		logger.logError(`Failed to list users: ${err.message}`, err);
+		res.status(502).json({ status: 'N', error: '用户列表获取失败' });
+	}
 });
+
+async function updateUserFlag(req, res, allowed, command) {
+	const id = parseUserId(req.params.id);
+	const { permission, value } = req.body || {};
+	if (id === null || typeof permission !== 'string' || !allowed.has(permission) || ![0, 1, true, false].includes(value)) {
+		return res.status(400).json({ status: 'N', error: '参数无效' });
+	}
+	try {
+		await accountRequest(command, [getCookie(req), String(id), permission, value ? '1' : '0']);
+		res.json({ status: 'Y' });
+	} catch (err) {
+		res.status(400).json({ status: 'N', error: err.message });
+	}
+}
 
 // 获取单个用户完整信息
 router.get('/user/:id', requirePermission('can_manage_users'), async (req, res) => {
-    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+	const id = parseUserId(req.params.id);
+	if (id === null) return res.status(400).json({ status: 'N', error: '用户 ID 无效' });
+	try { res.json({ status: 'Y', user: await getManagedUser(id) }); }
+	catch (err) { res.status(404).json({ status: 'N', error: '用户不存在' }); }
 });
 
 // 调整用户荣誉 tag
 router.post('/user/:id/badge', requireAdmin, async (req, res) => {
-    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+	const id = parseUserId(req.params.id);
+	if (id === null || id !== req.user.id) return res.status(403).json({ status: 'N', error: '当前账户服务只支持管理员修改自己的 badge' });
+	const badge = req.body && req.body.badge == null ? '' : String(req.body && req.body.badge || '');
+	const nameColor = req.body && req.body.name_color == null ? '' : String(req.body && req.body.name_color || '');
+	try {
+		await accountRequest('C', [getCookie(req), 'badge', badge, 'name_color', nameColor]);
+		res.json({ status: 'Y' });
+	} catch (err) { res.status(400).json({ status: 'N', error: err.message }); }
 });
 
 // 调整用户一般权限
 router.post('/user/:id/adjperm', requirePermission('can_manage_users'), async (req, res) => {
-    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+	return updateUserFlag(req, res, userLockPermissions, 'N');
 });
 
 // 调整用户管理员权限
 router.post('/user/:id/adjadmin', requireSuperAdmin, async (req, res) => {
-    res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+	return updateUserFlag(req, res, userAdminPermissions, 'A');
 });
 
 // 重置用户密码
 router.post('/user/:id/reset-password', requireSuperAdmin, async (req, res) => {
     res.status(501).json({ status: 'N', error: '当前 middleware 协议暂不支持此管理功能' });
+});
+
+// 封禁用户
+router.post('/user/:id/ban', requireSuperAdmin, async (req, res) => {
+	return updateUserFlag(req, res, new Set([userBanPermission]), 'A');
 });
 
 const unsupportedAdminRoutes = [

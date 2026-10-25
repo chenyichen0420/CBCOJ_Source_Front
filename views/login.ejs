@@ -59,7 +59,6 @@
 			const data = await resp.json();
 			if (data.status === 'Y') {
 				document.cookie = `user_cookie=${data.cookie}; path=/`;
-				alert('登录成功');
 				window.location.href = getSafeNextUrl();
 			} else {
 				document.getElementById('message').textContent = '登录失败: ' + data.error;

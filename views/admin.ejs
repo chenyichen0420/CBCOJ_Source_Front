@@ -16,6 +16,9 @@
 		.permission-table, .problem-table, .contest-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
 		.permission-table th, .problem-table th, .contest-table th { background: var(--bg-secondary); padding: 10px; text-align: left; }
 		.permission-table td, .problem-table td, .contest-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+		.permission-table th { white-space: nowrap; }
+		.permission-table td input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+		.permission-table td input[type="checkbox"]:disabled { cursor: not-allowed; }
 		.perms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; max-height: 400px; overflow-y: auto; padding: 10px 0; }
 		/* 使用全局样式 .modal / .modal-content（layout.css） */
 		.btn-warning { background-color: #ff9800; color: white; }

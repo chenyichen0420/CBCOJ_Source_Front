@@ -468,10 +468,10 @@ async function listProblems(offset, limit) {
 	if (response.command !== 'Y') throw new Error('Problem list request failed');
 	const parts = pool.parsePack(response.data).map(part => part.toString('utf8'));
 	const returnedCount = Number(parts.shift());
-	if (!Number.isInteger(returnedCount) || returnedCount < 0 || returnedCount !== parts.length) {
+	if (!Number.isInteger(returnedCount) || returnedCount < 0) {
 		throw new Error('Invalid problem count');
 	}
-	const total = parts.length;
+	const total = returnedCount;
 	const problems = await Promise.all(parts.map(id => readProblem(id, ['id', 'title', 'timelimit', 'memorylimit', 'time', 'author', 'open'])));
 	return { total, problems: problems.filter(Boolean) };
 }

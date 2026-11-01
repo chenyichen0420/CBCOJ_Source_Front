@@ -597,6 +597,8 @@ const pool = new ConnectionPool();
  * 提交 Hack 评测（使用多信道连接池）
  */
 async function submitHack({ code, input, output, setv, tl, ml, token, cookie }) {
+	throw new Error('multichannel demo function deprecated');
+
 	if (!code || !input || !output || !setv || tl === undefined || ml === undefined || !token || !cookie) {
 		throw new Error('Missing required fields');
 	}

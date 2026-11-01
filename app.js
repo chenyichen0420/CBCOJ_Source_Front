@@ -37,11 +37,16 @@ const allowedOrigins = ['https://oj.lzj-blog.top','https://cbcoj.dpdns.org','loc
 // ---------- 原有中间件 ----------
 app.use((req, res, next) => {
 	const origin = req.headers.origin;
-	if (origin && allowedOrigins.includes(origin)) {
+	const isAllowedOrigin = Boolean(origin && allowedOrigins.includes(origin));
+	if (isAllowedOrigin) {
 		res.header('Access-Control-Allow-Origin', origin);
+		res.header('Access-Control-Allow-Headers', 'Authorization, priority, Origin, X-Requested-With, Content-Type, Accept');
+		res.header('Access-Control-Allow-Methods', '*');
+		res.header('Access-Control-Max-Age', '600');
 	}
-	res.header('Access-Control-Allow-Headers', 'Authorization, priority, Origin, X-Requested-With, Content-Type, Accept');
-	res.header('Access-Control-Allow-Methods', '*');
+	if (req.method === 'OPTIONS') {
+		return isAllowedOrigin ? res.status(204).end() : res.status(403).end();
+	}
 	next();
 });
 app.use(express.json());

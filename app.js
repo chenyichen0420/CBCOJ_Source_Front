@@ -337,13 +337,20 @@ async function getAuthorMeta(username) {
 	]));
 	if (resp.command !== 'Y') return { username };
 	const parts = pool.parsePack(resp.data);
-	if (parts.length < 4) return { username };
+	if (parts.length < 5)
+		return {
+			uid: -1,
+			username: username,
+			role: 'unknown',
+			badge: '',
+			name_color: 'white'
+		};
 	return {
 		uid: Number(parts[0].toString('utf8')),
 		username: parts[1].toString('utf8'),
 		role: parts[2].toString('utf8') || 'user',
 		badge: parts[3].toString('utf8') || null,
-		name_color: parts[4] ? parts[4].toString('utf8') || null : null
+		name_color: parts[4].toString('utf8')
 	};
 }
 
@@ -521,8 +528,7 @@ app.get('/problem/edit/:id', requireLoginPage, requirePermission('can_manage_pro
 		const problem = await getProblemFromMiddleware(id);
 		if (!problem) return res.status(404).send('题目不存在');
 		const isAdmin = await checkPermission(req.user.id, 'can_manage_problems');
-		const isAuthor = Number(req.user.id) === Number(problem.author) || req.user.username === problem.author;
-		if (!isAdmin && !isAuthor) return res.status(403).send('无权编辑该题目');
+		if (!isAdmin) return res.status(403).send('无权编辑该题目');
 		const nav = isAdmin ? navigationAdmin : navigation;
 		res.render('problem-edit', { title: '编辑题目', navigation: nav, user: req.user, admin: isAdmin, problem });
 	} catch (err) {

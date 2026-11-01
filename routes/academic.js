@@ -38,11 +38,7 @@ router.post('/submit', requireLogin, upload.none(), requirePermission('can_submi
 		return res.json({ status: 'N', error: '代码必须是有效的 UTF-8 内容' });
 	}
 
-	let cookie = req.body.cookie;
-	if (!cookie && req.headers.cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) cookie = decodeURIComponent(match[1]);
-	}
+	let cookie = req.userCookie;
 	try {
 		const response = await pool.getJudge().send('S', pool.packParams([
 			cookie, String(Number(id)), language, sourceCode

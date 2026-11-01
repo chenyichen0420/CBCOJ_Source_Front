@@ -167,11 +167,7 @@ app.use((req, res, next) => {
 // 用户信息获取与设置中间件，顺序不可调整！先于所有动态资源逻辑
 app.use(async (req, res, next) => {
 	let cookie = null;
-	if (req.body && typeof req.body === 'object' && req.body.cookie) {
-		cookie = String(req.body.cookie);
-	} else if (req.query && typeof req.query === 'object' && req.query.cookie) {
-		cookie = String(req.query.cookie);
-	} else if (req.headers.cookie) {
+	if (req.headers.cookie) {
 		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
 		if (match) {
 			try {
@@ -180,6 +176,12 @@ app.use(async (req, res, next) => {
 				cookie = match[1];
 			}
 		}
+	}
+	// 以后需要逐渐缩紧 cookie 来源，限制为 header cookie 获得 same site + CSRF 扩展性
+	else if (req.query && typeof req.query === 'object' && req.query.cookie) {
+		cookie = String(req.query.cookie);
+	} else if (req.body && typeof req.body === 'object' && req.body.cookie) {
+		cookie = String(req.body.cookie);
 	}
 
 	req.userCookie = cookie;
@@ -338,15 +340,6 @@ async function getAuthorMeta(username) {
 		badge: parts[3].toString('utf8') || null,
 		name_color: parts[4] ? parts[4].toString('utf8') || null : null
 	};
-}
-
-function getRequestCookie(req) {
-	let cookie = req.body?.cookie || req.query?.cookie;
-	if (!cookie && req.headers.cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) cookie = decodeURIComponent(match[1]);
-	}
-	return cookie;
 }
 
 async function getUserMetaById(uid) {
@@ -676,7 +669,7 @@ app.get('/record/list', requireLoginPage, async (req, res) => {
 		const uid = targetUser ? targetUser.uid : (problemId ? -1 : Number(req.user.id));
 		const pid = problemId ? Number(problemId) : -1;
 		const response = await pool.getJudge().send('I', pool.packParams([
-			getRequestCookie(req), String(uid), String(pid), String(page), String(pageSize)
+			req.userCookie, String(uid), String(pid), String(page), String(pageSize)
 		]));
 
 		// console.log(response);
@@ -770,7 +763,7 @@ app.get('/record/:rid', requireLoginPage, async (req, res) => {
 	const ridErr = validateInt(rid, { positive: true, max: 2147483647 });
 	if (ridErr) return res.status(400).send(`rid: ${ridErr}`);
 	try {
-		const cookie = getRequestCookie(req);
+		const cookie = req.userCookie;
 		const [recordData, summaryResponse] = await Promise.all([
 			getRecordFromMiddleware(cookie, rid),
 			pool.getJudge().send('V', pool.packParams([cookie, rid]))

@@ -64,22 +64,6 @@ const uploadZip = multer({
 	}
 });
 
-function getUploadCookie(req) {
-	let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-	if (!cookie && req.headers.cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) {
-			try {
-				cookie = decodeURIComponent(match[1]);
-			} catch (err) {
-				throw new UploadError('登录凭据格式无效');
-			}
-		}
-	}
-	if (typeof cookie !== 'string' || !cookie) throw new UploadError('登录凭据缺失');
-	return cookie;
-}
-
 function getCandidateName(entryName) {
 	const normalized = entryName.replace(/\\/g, '/');
 	const name = normalized.slice(normalized.lastIndexOf('/') + 1);
@@ -341,7 +325,7 @@ async function uploadProblemData(req, res) {
 
 	let responseSent = false;
 	try {
-		const cookie = getUploadCookie(req);
+		const cookie = req.userCookie;
 		await receiveZipUpload(req, res);
 		if (!req.file) throw new UploadError('未选择文件');
 
@@ -428,15 +412,6 @@ function encodeStatement(statement) {
 	})));
 }
 
-function getCookie(req) {
-	let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-	if (!cookie && req.headers.cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) cookie = decodeURIComponent(match[1]);
-	}
-	return cookie;
-}
-
 async function readProblem(id, fields = ['id', 'title', 'difficulty', 'timelimit', 'memorylimit', 'time', 'author', 'statement', 'open']) {
 	const response = await pool.getJudge().send('P', pool.packParams([String(id), ...fields]));
 	if (response.command !== 'Y') return null;
@@ -476,7 +451,7 @@ async function listProblems(offset, limit) {
 	return { total, problems: problems.filter(Boolean) };
 }
 
-async function updateProblem(req, id) {
+async function updateProblem(req, id, cookie = req.userCookie) {
 	const problem = await readProblem(id);
 	if (!problem) return { error: '题目不存在', status: 404 };
 
@@ -525,7 +500,7 @@ async function updateProblem(req, id) {
 	}
 	if (pairs.length === 0) return { error: '没有可更新的字段', status: 400 };
 
-	const response = await pool.getJudge().send('U', pool.packParams([getCookie(req), String(id), ...pairs]));
+	const response = await pool.getJudge().send('U', pool.packParams([cookie, String(id), ...pairs]));
 	if (response.command !== 'Y') {
 		const parts = pool.parsePack(response.data);
 		return { error: parts[0]?.toString('utf8') || '题目更新失败', status: 400 };
@@ -539,7 +514,7 @@ async function createProblem(req, res) {
 	const descriptionErr = validateString(req.body?.description, { minLen: 1 });
 	if (descriptionErr) return res.status(400).json({ status: 'N', error: `description: ${descriptionErr}` });
 
-	const cookie = getCookie(req);
+	const cookie = req.userCookie;
 	const cookieErr = validateString(cookie, { minLen: 1, maxLen: 200 });
 	if (cookieErr) return res.status(401).json({ status: 'N', error: '登录状态无效，请重新登录' });
 
@@ -563,7 +538,7 @@ async function createProblem(req, res) {
 			body: { ...(req.body || {}), opened: 0 },
 			headers: req.headers,
 			query: req.query
-		}, id);
+		}, id, cookie);
 		if (!result.ok) {
 			return res.status(result.status).json({
 				status: 'N',
@@ -748,7 +723,7 @@ async function updateUserFlag(req, res, allowed, command) {
 		return res.status(400).json({ status: 'N', error: '参数无效' });
 	}
 	try {
-		await accountRequest(command, [getCookie(req), String(id), permission, value ? '1' : '0']);
+		await accountRequest(command, [req.userCookie, String(id), permission, value ? '1' : '0']);
 		res.json({ status: 'Y' });
 	} catch (err) {
 		res.status(400).json({ status: 'N', error: err.message });
@@ -770,7 +745,7 @@ router.post('/user/:id/badge', requireAdmin, async (req, res) => {
 	const badge = req.body && req.body.badge == null ? '' : String(req.body && req.body.badge || '');
 	const nameColor = req.body && req.body.name_color == null ? '' : String(req.body && req.body.name_color || '');
 	try {
-		await accountRequest('C', [getCookie(req), 'badge', badge, 'name_color', nameColor]);
+		await accountRequest('C', [req.userCookie, 'badge', badge, 'name_color', nameColor]);
 		res.json({ status: 'Y' });
 	} catch (err) { res.status(400).json({ status: 'N', error: err.message }); }
 });

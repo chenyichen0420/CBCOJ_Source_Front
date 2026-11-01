@@ -139,13 +139,7 @@ router.post('/updinfoshort', requireLogin, upload.none(), async (req, res) => {
 	if (old_paswd && old_paswd.length > 100)
 		return res.json({ status: 'N', error: 'Invalid password' });
 
-	let cookie = (req.body && req.body.cookie) || (req.query && req.query.cookie);
-	if (req.headers.cookie && !cookie) {
-		const match = req.headers.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
-		if (match) {
-			cookie = decodeURIComponent(match[1]);
-		}
-	}
+	let cookie = req.userCookie;
 	const usernameChanged = usrname !== user.username;
 	const args = [cookie];
 	if (usernameChanged) args.push('username', usrname);

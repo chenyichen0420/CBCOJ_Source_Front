@@ -107,7 +107,8 @@ router.get('/getinfoshort', async (req, res) => {
 			return res.json({ status: 'N', error: 'Invalid response from middleware' });
 		}
 		const uid = parseInt(parts[0].toString('utf8'));
-		if (isNaN(uid)) {
+		const iderr = validateInt(parts[0].toString('utf8'), { positive: false, min: 0, max: 2147483647 });
+		if (iderr) {
 			return res.json({ status: 'N', error: 'Invalid uid in response' });
 		}
 		// 处理字段：pubcode 为 "yes"/"no"，badge/name_color 可能为空字符串（转为 null 或保留）

@@ -303,7 +303,7 @@ async function getProblemFromMiddleware(id, fields = ['id', 'title', 'difficulty
 	const content = decodeStatement(statement);
 
 	const problem = {
-		id: values.id || String(id),
+		id: Number(values.id) || Number(id),
 		title: values.title || '',
 		difficulty: values.difficulty || '',
 		timelm: Number(values.timelimit) || 0,
@@ -327,14 +327,9 @@ async function getAuthorMeta(username) {
 	]));
 	if (resp.command !== 'Y') return { username };
 	const parts = pool.parsePack(resp.data);
-	if (parts.length < 5)
-		return {
-			uid: -1,
-			username: username,
-			role: 'unknown',
-			badge: '',
-			name_color: 'white'
-		};
+	if (parts.length < 5) return { username };
+	const iderr = validateInt(parts[0].toString('utf8'), { positive: false, min: 0, max: 2147483647 });
+	if (iderr) return { username };
 	return {
 		uid: Number(parts[0].toString('utf8')),
 		username: parts[1].toString('utf8'),
@@ -345,6 +340,8 @@ async function getAuthorMeta(username) {
 }
 
 async function getUserMetaById(uid) {
+	const iderr = validateInt(uid, { positive: false, min: 0, max: 2147483647 });
+	if (iderr) return null;
 	const conn = pool.getAccount();
 	const resp = await conn.send('U', pool.packParams([
 		'any', String(uid), 'uid', 'username', 'role', 'badge', 'name_color'
@@ -457,14 +454,14 @@ app.get('/problem/new', requireLoginPage, requirePermission('can_manage_problems
 
 // 题目详情
 app.get('/problem/:id', requireLoginPage, async (req, res) => {
-	const id = req.params.id;
-	const idErr = validateString(id, { minLen: 1, maxLen: 50 });
-	if (idErr) return res.status(400).send(`id: ${idErr}`);
+	const id = Number(req.params.id);
+	const iderr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (iderr) return res.status(400).send(`Invalid problem id`);
 	try {
 		const problem = await getProblemFromMiddleware(id);
 		if (!problem) return res.status(404).send('题目不存在');
 		const isAdmin = await checkAdmin(req);
-		const canmngproblem = req.user?.id != null ? await checkPermission(req.user.id, 'can_manage_problems') : false;
+		const canmngproblem = await checkPermission(req.user.id, 'can_manage_problems');
 		const nav = isAdmin ? navigationAdmin : navigation;
 
 		if (!problem.opened && !canmngproblem) {
@@ -511,9 +508,9 @@ app.get('/problem/:id', requireLoginPage, async (req, res) => {
 
 // 编辑题目界面（作者或有权限的用户）
 app.get('/problem/edit/:id', requireLoginPage, requirePermission('can_manage_problems'), async (req, res) => {
-	const id = req.params.id;
-	const idErr = validateString(id, { minLen: 1, maxLen: 50 });
-	if (idErr) return res.status(400).send(`id: ${idErr}`);
+	const id = Number(req.params.id);
+	const iderr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (iderr) return res.status(400).send(`Invalid problem id`);
 	try {
 		const problem = await getProblemFromMiddleware(id);
 		if (!problem) return res.status(404).send('题目不存在');
@@ -582,55 +579,6 @@ app.get('/problem/:id/solution', requireLoginPage, async (req, res) => {
 		}
 	));
 	//not implemented yet
-});
-	
-// 讨论列表
-app.get('/discussions', requireLoginPage, async (req, res) => {
-	let page = 1;
-	if (req.query.page !== undefined) {
-		const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
-		if (err) return res.status(400).send(`page: ${err}`);
-		page = Number(req.query.page);
-	}
-	const perPage = 10;
-	const offset = (page - 1) * perPage;
-	/*
-	MODULE: Discussions
-	Status: INDEPENDENT (kept in local database)
-
-	This module is NOT part of the middleware.
-	All discussions/replies data should be stored in local MySQL database.
-	No changes needed.
-	*/
-	const isAdmin = await checkAdmin(req);
-	const nav = isAdmin ? navigationAdmin : navigation;
-	res.render('discussions', { discussions, page, totalPages, navigation: nav, user: req.user });
-});
-
-// 讨论详情
-app.get('/discussion-detail/:cid', requireLoginPage, async (req, res) => {
-	const cid = req.params.cid;
-	const cidErr = validateString(cid, { minLen: 1, maxLen: 50 });
-	if (cidErr) return res.status(400).send(`cid: ${cidErr}`);
-	let page = 1;
-	if (req.query.page !== undefined) {
-		const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
-		if (err) return res.status(400).send(`page: ${err}`);
-		page = Number(req.query.page);
-	}
-	const perPage = 10;
-	const offset = (page - 1) * perPage;
-	/*
-	MODULE: Discussions
-	Status: INDEPENDENT (kept in local database)
-
-	This module is NOT part of the middleware.
-	All discussions/replies data should be stored in local MySQL database.
-	No changes needed.
-	*/
-	const isAdmin = await checkAdmin(req);
-	const nav = isAdmin ? navigationAdmin : navigation;
-	res.render('discussion-detail', { discussion, replies: replyRows, cid, page, totalPages, navigation: nav, user: req.user });
 });
 
 // 提交列表
@@ -774,7 +722,7 @@ app.get('/record/:rid', requireLoginPage, async (req, res) => {
 		const summary = pool.parsePack(summaryResponse.data).map(part => part.toString('utf8'));
 		if (summary.length !== 8) throw new Error('Invalid record summary response');
 		const uid = Number(summary[0]);
-		const pid = summary[1];
+		const pid = Number(summary[1]);
 		const [author, problem] = await Promise.all([
 			getUserMetaById(uid),
 			getProblemFromMiddleware(pid, ['id', 'title'])
@@ -830,56 +778,6 @@ app.get('/record/:rid', requireLoginPage, async (req, res) => {
 	}
 });
 
-// 比赛列表
-app.get('/contests', requireLoginPage, async (req, res) => {
-	let page = 1;
-	if (req.query.page !== undefined) {
-		const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
-		if (err) return res.status(400).send(`page: ${err}`);
-		page = Number(req.query.page);
-	}
-	const limit = 10;
-	const offset = (page - 1) * limit;
-	const isAdmin = await checkAdmin(req);
-	/*
-	DB Interface, waiting for implement
-
-	Input: page (int, 1-based), isAdmin (boolean)
-	Output: { total, totalPages, contests: [{ id, title, start_time, end_time }, ...] }
-
-	Expected middleware behavior:
-	- Get paginated contest list
-	- Non-admin: only show started contests (start_time <= NOW())
-	- Admin: show all contests
-	- Return total count and contests array
-	*/
-	const nav = isAdmin ? navigationAdmin : navigation;
-	res.render('contests', { contests, page, totalPages, navigation: nav, user: req.user });
-});
-
-// 比赛详情
-app.get('/contest/:id', requireLoginPage, async (req, res) => {
-	const id = req.params.id;
-	const idErr = validateString(id, { minLen: 1, maxLen: 50 });
-	if (idErr) return res.status(400).send(`id: ${idErr}`);
-	const isAdmin = await checkAdmin(req);
-	/*
-	DB Interface, waiting for implement
-
-	Input: id (string), isAdmin (boolean)
-	Output: { contest, problems, rank }
-
-	Expected middleware behavior:
-	- Get contest by id
-	- Non-admin: check if contest has started
-	- Get problem list with display order
-	- Get ranking (username, solved count)
-	- Return full contest data
-	*/
-	const nav = isAdmin ? navigationAdmin : navigation;
-	res.render('contest', { contest, problems, rank, navigation: nav, user: req.user });
-});
-
 // 个人主页（公开）
 app.get('/profile/:username', requireLoginPage, async (req, res) => {
 	const username = req.params.username;
@@ -909,29 +807,6 @@ app.get('/profile-edit', requireLoginPage, async (req, res) => {
 	res.render('profile-edit', { navigation: nav, user: req.user });
 });
 
-// 私信页面
-app.get('/chat', requireLoginPage, async (req, res) => {
-	let page = 1;
-	if (req.query.page !== undefined) {
-		const err = validateInt(req.query.page, { positive: true, max: 2147483647 });
-		if (err) return res.status(400).send(`page: ${err}`);
-		page = Number(req.query.page);
-	}
-	const perPage = 10;
-	const offset = (page - 1) * perPage;
-	/*
-	MODULE: Chat / Private Messages
-	Status: INDEPENDENT (kept in local database)
-
-	This module is NOT part of the middleware.
-	All private messages data should be stored in local MySQL database.
-	No changes needed.
-	*/
-	const isAdmin = await checkAdmin(req);
-	const nav = isAdmin ? navigationAdmin : navigation;
-	res.render('chat', { messages, page, totalPages, navigation: nav, user: req.user });
-});
-
 // 个人设置
 app.get('/settings', requireLoginPage, async (req, res) => {
 	const isAdmin = await checkAdmin(req);
@@ -944,13 +819,6 @@ app.get('/login', async (req, res) => {
 	const isAdmin = await checkAdmin(req);
 	const nav = isAdmin ? navigationAdmin : navigation;
 	res.render('login', { navigation: nav, user: req.user });
-});
-
-// 注册页面
-app.get('/register', async (req, res) => {
-	const isAdmin = await checkAdmin(req);
-	const nav = isAdmin ? navigationAdmin : navigation;
-	res.render('register', { navigation: nav, user: req.user });
 });
 
 // 管理后台页面

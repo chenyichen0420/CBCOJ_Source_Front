@@ -18,8 +18,6 @@ const { validateInt, validateString, contentLengthGuard } = require('../validati
 
 router.post('/submit', requireLogin, contentLengthGuard(MAX_SUBMIT_BODY_BYTES), upload.none(), requirePermission('can_submit_code'), async (req, res) => {
 	const { id, code, language } = req.body;
-	const idErr = validateString(id, { minLen: 1, maxLen: 50 });
-	if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });
 	const codeErr = validateString(code, { minLen: 1 });
 	if (codeErr) return res.json({ status: 'N', error: `code: ${codeErr}` });
 	const langErr = validateString(language, { minLen: 1, maxLen: 20 });
@@ -56,7 +54,8 @@ router.post('/submit', requireLogin, contentLengthGuard(MAX_SUBMIT_BODY_BYTES), 
 			return res.json({ status: 'N', error: parts[0]?.toString('utf8') || '提交失败' });
 		}
 		const rid = parts[0]?.toString('utf8');
-		if (!validateInt(rid, { positive: true, min: 1, max: 2147482647 })) throw new Error('Invalid submission id from middleware');
+		const iderr = validateInt(parts[0]?.toString('utf8'), { positive: true, min: 1, max: 2147483647 });
+		if (iderr) throw new Error('Invalid submission id from middleware');
 		return res.json({ status: 'Y', rid });
 	} catch (err) {
 		logger.logError(`Code submission failed for user ${req.user.id}, problem ${id}: ${err.message}`, err);

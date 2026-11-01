@@ -1,6 +1,7 @@
 const pool = require('./db');
 const { packParams, parsePack } = require('./db');
 const logger = require('./logger');
+const { validateInt, validateString } = require('./validation');
 
 const FLAG_SIZE = 6;
 const POS_ADMIN1 = 0;
@@ -58,7 +59,8 @@ async function getUserByCookie(cookie) {
 			return null;
 		}
 		const uid = parseInt(parts[0].toString('utf8'));
-		if (isNaN(uid)) {
+		const iderr = validateInt(parts[0].toString('utf8'), { positive: false, min: 0, max: 2147483647 });
+		if (iderr) {
 			logger.logError('getUserByCookie: Invalid uid', new Error('uid: ' + parts[0]));
 			return null;
 		}

@@ -362,8 +362,8 @@ function receiveZipUpload(req, res) {
 }
 
 async function uploadProblemData(req, res) {
-	const idErr = validateInt(req.params.id, { positive: true });
-	if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
+	const iderr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (iderr) return res.status(400).send(`Invalid problem id`);
 
 	let responseSent = false;
 	try {
@@ -535,18 +535,14 @@ async function updateProblem(req, id, cookie = req.userCookie) {
 	if (body.difficulty !== undefined) pairs.push('difficulty', encodeStoredText(body.difficulty));
 	const timeLimit = body.timelimit;
 	const memoryLimit = body.memorylimit;
-	if (timeLimit !== undefined) {
-		if (!Number.isSafeInteger(Number(timeLimit)) || Number(timeLimit) <= 0) {
-			return { error: 'timelimit 必须是正整数', status: 400 };
-		}
-		pairs.push('timelimit', encodeStoredText(timeLimit));
-	}
-	if (memoryLimit !== undefined) {
-		if (!Number.isSafeInteger(Number(memoryLimit)) || Number(memoryLimit) <= 0) {
-			return { error: 'memorylimit 必须是正整数', status: 400 };
-		}
-		pairs.push('memorylimit', encodeStoredText(memoryLimit));
-	}
+	const timeerr = validateInt(body.timelimit, { positive: true });
+	const memerr = validateInt(body.memorylimit, { positive: true });
+	if (timeLimit !== undefined && timeerr)
+		return { error: 'timelimit 必须是正整数', status: 400 };
+	if (memoryLimit !== undefined && memerr)
+		return { error: 'memorylimit 必须是正整数', status: 400 };
+	pairs.push('timelimit', encodeStoredText(timeLimit));
+	pairs.push('memorylimit', encodeStoredText(memoryLimit));
 	if (Object.keys(statement).length > 0) pairs.push('statement', encodeStatement(statement));
 	if (body.opened !== undefined) {
 		if (![true, false, 1, 0, '1', '0', 'open', 'closed'].includes(body.opened)) {
@@ -588,7 +584,7 @@ async function createProblem(req, res) {
 
 		const parts = pool.parsePack(allocation.data);
 		id = parts.length === 1 ? parts[0].toString('utf8') : '';
-		const idErr = validateInt(id, { positive: true });
+		const idErr = validateInt(id, { positive: true, max: 2147483647 });
 		if (idErr) throw new Error('题目编号申请接口返回无效编号');
 
 		const result = await updateProblem({
@@ -618,10 +614,10 @@ async function createProblem(req, res) {
 router.get('/problems', requirePermission('can_manage_problems'), async (req, res) => {
 	let page = Number(req.query.page || 1);
 	let limit = Number(req.query.limit || 20);
-	const pageErr = validateInt(page, { positive: true });
-	const limitErr = validateInt(limit, { positive: true, min: 1 });
-	if (pageErr) return res.status(400).json({ status: 'N', error: `page: ${pageErr}` });
-	if (limitErr) return res.status(400).json({ status: 'N', error: `limit: ${limitErr}` });
+	const pageerr = validateInt(req.query.page, { positive: true, min: 1, max: 2147483647 });
+	const limerr = validateInt(req.query.limit, { positive: true, min: 1, max: 2147483647 });
+	if (pageerr) page = 1;
+	if (limerr) limit = 20;
 	try {
 		const result = await listProblems((page - 1) * limit + 1, limit);
 		res.json({ status: 'Y', ...result, page, totalPages: Math.ceil(result.total / limit) });
@@ -642,10 +638,11 @@ router.get('/problems/all', requirePermission('can_manage_problems'), async (req
 
 // 直接获取单个题目完整信息
 router.get('/problem/:id', requirePermission('can_manage_problems'), async (req, res) => {
-	const idErr = validateString(req.params.id, { minLen: 1, maxLen: 50 });
-	if (idErr) return res.status(400).json({ status: 'N', error: `id: ${idErr}` });
+	const id = Number(req.params.id);
+	const iderr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (iderr) return res.status(400).send(`Invalid problem id`);
 	try {
-		const problem = await readProblem(req.params.id);
+		const problem = await readProblem(id);
 		if (!problem) return res.status(404).json({ status: 'N', error: '题目不存在' });
 		delete problem._statement;
 		res.json({ status: 'Y', ...problem, edit_url: `/problem/edit/${problem.id}` });
@@ -656,8 +653,11 @@ router.get('/problem/:id', requirePermission('can_manage_problems'), async (req,
 
 // 编辑题目信息
 router.post('/problem/edit/:id', requirePermission('can_manage_problems'), async (req, res) => {
+	const id = Number(req.params.id);
+	const iderr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (iderr) return res.status(400).send(`Invalid problem id`);
 	try {
-		const result = await updateProblem(req, req.params.id);
+		const result = await updateProblem(req, id);
 		if (!result.ok) return res.status(result.status).json({ status: 'N', error: result.error });
 		res.json({ status: 'Y' });
 	} catch (err) {
@@ -715,8 +715,9 @@ const userLockPermissions = new Set([
 const userBanPermission = 'LOCK_USER_BANNED';
 
 function parseUserId(value) {
-	const id = Number(value);
-	return Number.isInteger(id) && id >= 0 ? id : null;
+	const iderr = validateInt(value, { positive: false, min: 0, max: 2147483647 });
+	if (iderr) return null;
+	return Number(value);
 }
 
 async function accountRequest(command, params) {
@@ -763,9 +764,10 @@ async function getUserCount() {
 }
 
 router.get('/users', requirePermission('can_manage_users'), async (req, res) => {
-	const page = Number(req.query.page || 1);
-	const limit = 10;
-	if (!Number.isInteger(page) || page < 1) return res.status(400).json({ status: 'N', error: '页码无效' });
+	let page = Number(req.query.page || 1);
+	let limit = 10;
+	const pageerr = validateInt(req.query.page, { positive: true, min: 1, max: 2147483647 });
+	if (pageerr) page = 1;
 	try {
 		const total = await getUserCount();
 		const start = (page - 1) * limit;

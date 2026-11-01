@@ -276,6 +276,7 @@ function decodeStoredText(value) {
 	return text;
 }
 
+const UNSAFE_STATEMENT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function decodeStatement(statement) {
 	let content;
 	try {
@@ -283,18 +284,23 @@ function decodeStatement(statement) {
 	} catch (_) {
 		return { description: statement || '' };
 	}
-	if (!content || Array.isArray(content)) return {};
-	return Object.fromEntries(Object.entries(content).map(([key, value]) => {
+	if (!content || typeof content !== 'object' || Array.isArray(content)) return {};
+
+	const result = {};
+	for (const [key, value] of Object.entries(content)) {
+		if (UNSAFE_STATEMENT_KEYS.has(key)) continue;
 		const decoded = decodeStoredText(value);
 		if (key === 'sample') {
 			try {
-				return [key, JSON.parse(decoded)];
+				result[key] = JSON.parse(decoded);
 			} catch (_) {
-				return [key, []];
+				result[key] = [];
 			}
+		} else {
+			result[key] = decoded;
 		}
-		return [key, decoded];
-	}));
+	}
+	return result;
 }
 
 async function getProblemFromMiddleware(id, fields = ['id', 'title', 'difficulty', 'timelimit', 'memorylimit', 'time', 'author', 'statement', 'open']) {

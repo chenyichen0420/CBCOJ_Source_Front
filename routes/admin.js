@@ -430,6 +430,7 @@ function decodeStoredText(value) {
 	return text;
 }
 
+const UNSAFE_STATEMENT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function decodeStatement(raw) {
 	let statement;
 	try {
@@ -437,21 +438,35 @@ function decodeStatement(raw) {
 	} catch (_) {
 		return { description: raw || '' };
 	}
-	if (!statement || Array.isArray(statement)) return {};
-	return Object.fromEntries(Object.entries(statement).map(([key, value]) => {
+	if (!statement || typeof statement !== 'object' || Array.isArray(statement)) return {};
+
+	const result = {};
+	for (const [key, value] of Object.entries(statement)) {
+		if (UNSAFE_STATEMENT_KEYS.has(key)) continue;
 		const decoded = decodeStoredText(value);
 		if (key === 'sample') {
-			try { return [key, JSON.parse(decoded)]; } catch (_) { return [key, []]; }
+			try {
+				result[key] = JSON.parse(decoded);
+			} catch (_) {
+				result[key] = [];
+			}
+		} else {
+			result[key] = decoded;
 		}
-		return [key, decoded];
-	}));
+	}
+	return result;
 }
 
 function encodeStatement(statement) {
-	return JSON.stringify(Object.fromEntries(Object.entries(statement || {}).map(([key, value]) => {
-		const text = key === 'sample' ? JSON.stringify(Array.isArray(value) ? value : []) : String(value ?? '');
-		return [key, encodeStoredText(text)];
-	})));
+	const safe = {};
+	for (const [key, value] of Object.entries(statement || {})) {
+		if (UNSAFE_STATEMENT_KEYS.has(key)) continue;
+		const text = key === 'sample'
+			? JSON.stringify(Array.isArray(value) ? value : [])
+			: String(value ?? '');
+		safe[key] = encodeStoredText(text);
+	}
+	return JSON.stringify(safe);
 }
 
 async function readProblem(id, fields = ['id', 'title', 'difficulty', 'timelimit', 'memorylimit', 'time', 'author', 'statement', 'open']) {

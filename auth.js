@@ -117,11 +117,11 @@ async function getUserPermissions(userId) {
 			can_manage_contests: true,
 			can_manage_chat: true,
 			can_manage_articles: true,
-			can_submit_code: !(lock1 & 0x03),
+			can_submit_code: true,
 			can_create_discussion: true,
 			can_reply_discussion: true,
 			can_post_message: true,
-			can_view_others_submissions: !(lock1 & 0x11),
+			can_view_others_submissions: true,
 		};
 	}
 

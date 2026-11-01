@@ -76,7 +76,7 @@ router.get('/login', async (req, res) => {
 
 // ---------- 验证 cookie ----------
 router.get('/verifycookie', async (req, res) => {
-	const cookie = req.query.cookie;
+	const cookie = req.userCookie;
 	const cErr = validateString(cookie, { minLen: 1, maxLen: 200 });
 	if (cErr) return res.json({ status: 'N' });
 	try {

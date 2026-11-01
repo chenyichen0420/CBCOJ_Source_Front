@@ -56,7 +56,7 @@ router.post('/submit', requireLogin, contentLengthGuard(MAX_SUBMIT_BODY_BYTES), 
 			return res.json({ status: 'N', error: parts[0]?.toString('utf8') || '提交失败' });
 		}
 		const rid = parts[0]?.toString('utf8');
-		if (!rid || !/^\d+$/.test(rid)) throw new Error('Invalid submission id from middleware');
+		if (!validateInt(rid, { positive: true, min: 1, max: 2147482647 })) throw new Error('Invalid submission id from middleware');
 		return res.json({ status: 'Y', rid });
 	} catch (err) {
 		logger.logError(`Code submission failed for user ${req.user.id}, problem ${id}: ${err.message}`, err);

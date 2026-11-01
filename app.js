@@ -248,16 +248,6 @@ async function getStatistics() {
 
 // ---------- 服务端渲染路由 ----------
 
-function escapeHtml(str) {
-	if (!str) return '';
-	return str.replace(/[&<>]/g, function(m) {
-		if (m === '&') return '&amp;';
-		if (m === '<') return '&lt;';
-		if (m === '>') return '&gt;';
-		return m;
-	});
-}
-
 function decodeStoredText(value) {
 	if (value === undefined || value === null || value === '') return '';
 	const text = String(value);

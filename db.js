@@ -1,7 +1,6 @@
 // db.js — CBCOJ Middleware Client
 
 const net = require('net');
-const crypto = require('crypto');
 const config = require('./config');
 const logger = require('./logger');
 const RECORD_PAGE_SIZE = 20;

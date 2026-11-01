@@ -210,6 +210,67 @@ function requireString(source, field, options = {}) {
 	};
 }
 
+/**
+ * 请求体大小守卫中间件生成器。
+ *
+ * 定位：早期拒绝层，不是安全边界。安全边界是 multer 的 limits
+ *      与 express.json/urlencoded 的 limit。
+ *
+ * 覆盖：
+ *   - Content-Length 缺失 / 非十进制 / 重复头（"100, 100"）→ 400/411
+ *   - Transfer-Encoding 与 Content-Length 并存（CL.TE / TE.CL）→ 400（CWE-444）
+ *   - 单独 Transfer-Encoding（chunked 无法静态预检）→ 411
+ *   - Content-Length 超限 → 413
+ *
+ * 注意：
+ *   - 不处理 GET/HEAD/OPTIONS；
+ *   - 若前置反向代理重写 Content-Length，本中间件可能失真，
+ *     但 multer limits 仍然按实际读取字节兜底；
+ *   - 若未来需支持 chunked，应改为流式累计限制，而非放行。
+ */
+function contentLengthGuard(maxBytes) {
+	if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+		throw new Error('contentLengthGuard: maxBytes must be a positive safe integer');
+	}
+	return function contentLengthGuardMiddleware(req, res, next) {
+		const method = req.method;
+		if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+			return next();
+		}
+
+		const transferEncoding = req.headers['transfer-encoding'];
+		const contentLengthRaw = req.headers['content-length'];
+
+		// CL.TE / TE.CL smuggling 防护
+		if (transferEncoding !== undefined && contentLengthRaw !== undefined) {
+			return res.status(400).json({ status: 'N', error: '请求头冲突' });
+		}
+		// chunked 无法静态预检
+		if (transferEncoding !== undefined) {
+			return res.status(411).json({ status: 'N', error: '不支持 chunked 传输' });
+		}
+		// 必须带 Content-Length
+		if (contentLengthRaw === undefined) {
+			return res.status(411).json({ status: 'N', error: '请求缺少 Content-Length' });
+		}
+		// 严格十进制：拒绝 "100, 100"（重复头合并）、"0x10"、" 100 "
+		if (typeof contentLengthRaw !== 'string' || !/^\d+$/.test(contentLengthRaw)) {
+			return res.status(400).json({ status: 'N', error: '无效的 Content-Length' });
+		}
+		const length = Number(contentLengthRaw);
+		if (!Number.isSafeInteger(length) || length < 0) {
+			return res.status(400).json({ status: 'N', error: '无效的 Content-Length' });
+		}
+		if (length > maxBytes) {
+			return res.status(413).json({
+				status: 'N',
+				error: `请求体不能超过 ${Math.ceil(maxBytes / 1024)} KiB`
+			});
+		}
+		next();
+	};
+}
+
 module.exports = {
 	validateInt,
 	validateString,
@@ -217,6 +278,7 @@ module.exports = {
 	validateArray,
 	validateBoolean,
 	validateEnum,
+	contentLengthGuard,
 	requireFields,
 	requireInt,
 	requireString

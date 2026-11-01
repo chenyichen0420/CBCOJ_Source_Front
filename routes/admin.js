@@ -10,7 +10,7 @@ const pool = require('../db');
 const { requirePermission, requireAdmin, requireSuperAdmin } = require('../auth');
 const config = require('../config');
 const logger = require('../logger');
-const { validateInt, validateString } = require('../validation');
+const { validateInt, validateString, contentLengthGuard } = require('../validation');
 
 const uploadConfig = config.upload;
 if (!uploadConfig || typeof uploadConfig.tempDir !== 'string' || !uploadConfig.tempDir.trim()) {
@@ -669,7 +669,13 @@ router.post('/problem/edit/:id', requirePermission('can_manage_problems'), async
 router.post('/problem/new', requirePermission('can_manage_problems'), createProblem);
 
 // 上传题目数据
-router.post('/problem/:id/upload-data', requirePermission('can_manage_problems'), uploadProblemData);
+const MAX_ZIP_UPLOAD_BODY_BYTES = maxZipSizeBytes + 1024 * 1024;
+router.post(
+	'/problem/:id/upload-data',
+	requirePermission('can_manage_problems'),
+	contentLengthGuard(MAX_ZIP_UPLOAD_BODY_BYTES),
+	uploadProblemData
+);
 
 // 暂不支持：当前 JudgeSession 没有删除、精选或检查器接口。
 // 新建题目通过 JudgeSession 的编号申请和题目更新接口完成。

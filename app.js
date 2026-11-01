@@ -9,14 +9,6 @@ const { validateInt, validateString } = require('./validation');
 
 const app = express();
 
-// 禁止直接访问 index.html
-app.use((req, res, next) => {
-	if (req.url.endsWith('/index.html') || req.url === '/index.html') {
-		return res.status(403).send('Forbidden: direct access to index.html is not allowed.');
-	}
-	next();
-});
-
 // 设置模板引擎
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -49,8 +41,10 @@ app.use((req, res, next) => {
 	}
 	next();
 });
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+const BODY_LIMIT = '128kb';
+app.use(express.json({ limit: BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: BODY_LIMIT }));
 
 app.use((req, res, next) => {
 	req.injections = req.injections || {};
@@ -990,6 +984,11 @@ app.use(async (err, req, res, next) => {
 	const ip = logger.getClientIp(req);
 	const userId = req.user ? req.user.id : null;
 	const username = req.user ? req.user.username : null;
+
+	if (err && (err.status === 413 || err.type === 'entity.too.large')) {
+		return res.status(413).json({ status: 'N', error: '请求体过大' });
+	}
+
 	await logger.logError(`Unhandled error: ${err.message}`, err);
 	console.error(err);
 	res.status(500).json({ status: 'N', error: '服务器内部错误' });

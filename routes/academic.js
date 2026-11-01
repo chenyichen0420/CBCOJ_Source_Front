@@ -5,10 +5,18 @@ const { requireLogin, requireAdmin, requirePermission, checkPermission } = requi
 const multer = require('multer');
 const { TextDecoder } = require('util');
 const logger = require('../logger');
-const upload = multer();
-const { validateInt, validateString } = require('../validation');
+const MAX_SUBMIT_BODY_BYTES = 128 * 1024;
+const upload = multer({
+	limits: {
+		fieldSize: MAX_SUBMIT_BODY_BYTES,
+		fields: 8,
+		files: 0,
+		parts: 9
+	}
+});
+const { validateInt, validateString, contentLengthGuard } = require('../validation');
 
-router.post('/submit', requireLogin, upload.none(), requirePermission('can_submit_code'), async (req, res) => {
+router.post('/submit', requireLogin, contentLengthGuard(MAX_SUBMIT_BODY_BYTES), upload.none(), requirePermission('can_submit_code'), async (req, res) => {
 	const { id, code, language } = req.body;
 	const idErr = validateString(id, { minLen: 1, maxLen: 50 });
 	if (idErr) return res.json({ status: 'N', error: `id: ${idErr}` });

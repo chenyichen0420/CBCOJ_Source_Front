@@ -6,13 +6,30 @@ const pool = require('../db');
 const { getUserByCookie, requireLogin, getUserPermissions, requirePermission } = require('../auth');
 const logger = require('../logger');
 const multer = require('multer');
-const upload = multer();
 const fs = require('fs');
 const path = require('path');
-const AdmZip = require('adm-zip');
 const util = require('util');
-// const { DATA_ROOT, CHECKER_ROOT } = require('../config');
-const { validateInt, validateString, validateEmail, validateBoolean } = require('../validation');
+const { validateInt, validateString, validateEmail, validateBoolean, contentLengthGuard } = require('../validation');
+
+const MAX_FORM_BODY_BYTES = 128 * 1024;
+const MAX_FILE_UPLOAD_BYTES = 16 * 1024 * 1024;
+const upload = multer({
+	limits: {
+		fieldSize: MAX_FORM_BODY_BYTES,
+		fields: 16,
+		files: 0,
+		parts: 17
+	}
+});
+const uploadAvatar = multer({
+	limits: {
+		fileSize: MAX_FILE_UPLOAD_BYTES,
+		files: 1,
+		fieldSize: 16 * 1024,
+		fields: 0,
+		parts: 2
+	}
+});
 
 // 获取当前用户的所有权限
 router.get('/mypermissions', requireLogin, async (req, res) => {
@@ -116,7 +133,7 @@ router.get('/getinfoshort', async (req, res) => {
 });
 
 // 更新个人信息
-router.post('/updinfoshort', requireLogin, upload.none(), async (req, res) => {
+router.post('/updinfoshort', requireLogin, contentLengthGuard(MAX_FORM_BODY_BYTES), upload.none(), async (req, res) => {
 	const { usrname, paswd, old_paswd, publiccode, slogan } = req.body;
 	const user = req.user;
 	const ip = logger.getClientIp(req);
@@ -234,7 +251,7 @@ router.get('/verifycode', async (req, res) => {
 // 导出在文件末尾（在附加路由之后）
 
 // 头像上传
-router.post('/upload-avatar', requireLogin, upload.single('avatar'), async (req, res) => {
+router.post('/upload-avatar', requireLogin, contentLengthGuard(MAX_FILE_UPLOAD_BYTES), uploadAvatar.single('avatar'), async (req, res) => {
 	return res.json({ status: 'N', error: '保存失败' });
 	//暂时不支持自定义头像
 	try {

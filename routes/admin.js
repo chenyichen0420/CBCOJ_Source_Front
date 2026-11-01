@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const fsp = fs.promises;
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const AdmZip = require('adm-zip');
+const { ZipFile } = require('node:zlib');
 const multer = require('multer');
 const router = express.Router();
 const pool = require('../db');
@@ -206,111 +206,153 @@ function parseAndValidateSetFile(setData) {
 	return { ion, spj, scn, subtasks };
 }
 
-function readZipEntry(entry) {
-	return new Promise((resolve, reject) => {
-		try {
-			entry.getDataAsync((data, err) => {
-				if (err) return reject(err);
-				resolve(data);
-			});
-		} catch (err) {
-			reject(err);
+async function readEntryBoundedSafe(zip, entryName, maxEntryBytes, remainingTotalBytes) {
+	const entry = await zip.get(entryName);
+	if (!entry) {
+		throw new UploadError(`ZIP 中缺少条目 ${entryName}`);
+	}
+
+	const declaredSize = entry.uncompressedSize;
+	if (!Number.isSafeInteger(declaredSize) || declaredSize < 0) {
+		throw new UploadError(`文件 ${entryName} 的元数据大小无效`);
+	}
+
+	const limit = Math.min(maxEntryBytes, remainingTotalBytes);
+	if (declaredSize > limit) {
+		throw new UploadError(`文件 ${entryName} 声明的解压大小超过限制`);
+	}
+
+	const chunks = [];
+	let total = 0;
+
+	const stream = await zip.stream(entryName);
+	for await (const chunk of stream) {
+		total += chunk.length;
+		if (total > limit) {
+			stream.destroy?.();
+			throw new UploadError(`文件 ${entryName} 解压超过限制`);
 		}
-	});
+		chunks.push(chunk);
+	}
+
+	if (total !== declaredSize) {
+		throw new UploadError(`文件 ${entryName} 的解压大小与 ZIP 元数据不一致`);
+	}
+
+	return Buffer.concat(chunks, total);
 }
 
 async function extractWhitelistedFiles(zipPath) {
 	let zip;
 	try {
-		zip = new AdmZip(zipPath);
+		zip = await ZipFile.open(zipPath);
 	} catch (err) {
 		throw new UploadError('ZIP 文件无效或已损坏');
 	}
 
-	let entries;
 	try {
-		entries = zip.getEntries();
-	} catch (err) {
-		throw new UploadError('ZIP 文件目录无效或已损坏');
-	}
-	if (entries.length > maxEntryCount) throw new UploadError('ZIP 文件包含过多条目');
+		// 1. 枚举条目，收集候选文件名
+		const candidates = new Map();
+		let entryCount = 0;
 
-	const candidates = new Map();
-	for (const entry of entries) {
-		if (entry.isDirectory) continue;
-		const name = getCandidateName(entry.entryName);
-		if (!name || 
-			(name.endsWith('.in') && name.length === 3) ||
-			(name.endsWith('.out') && name.length === 4) ||
-			(name.endsWith('.cpp') && name.length === 4)) continue;
-		if (candidates.has(name)) throw new UploadError(`ZIP 中存在重复文件名: ${name}`);
-		candidates.set(name, entry);
-	}
+		for await (const entry of zip) {
+			entryCount++;
+			if (entryCount > maxEntryCount) {
+				throw new UploadError('ZIP 文件包含过多条目');
+			}
+			if (entry.isDirectory) continue;
 
-	// 强制要求 .set 存在，并将其作为权威清单
-	const setEntry = candidates.get('.set');
-	if (!setEntry) throw new UploadError('ZIP 中缺少 .set 评测配置文件');
+			const name = getCandidateName(entry.fileName);
+			if (!name ||
+				(name.endsWith('.in') && name.length === 3) ||
+				(name.endsWith('.out') && name.length === 4) ||
+				(name.endsWith('.cpp') && name.length === 4)) continue;
 
-	let setData;
-	try {
-		setData = await readZipEntry(setEntry);
-	} catch (err) {
-		throw new UploadError(`无法解压 .set 文件: ${err.message}`);
-	}
-	const setInfo = parseAndValidateSetFile(setData);
-
-	// 仅保留 .set 与 .cpp；.in/.out 只保留 .set 引用的 stem
-	const selectedNames = [];
-	for (const name of candidates.keys()) {
-		if (name === '.set' || name.endsWith('.cpp')) selectedNames.push(name);
-	}
-
-	const referencedStems = new Set();
-	for (const st of setInfo.subtasks) {
-		for (const c of st.cases) referencedStems.add(c.name);
-	}
-	for (const stem of referencedStems) {
-		const inName = `${stem}.in`;
-		const outName = `${stem}.out`;
-		if (!candidates.has(inName)) {
-			throw new UploadError(`.set 引用的测试点 "${stem}" 缺少 ${inName}`);
+			if (candidates.has(name)) {
+				throw new UploadError(`ZIP 中存在重复文件名: ${name}`);
+			}
+			candidates.set(name, entry);
 		}
-		if (!candidates.has(outName)) {
-			throw new UploadError(`.set 引用的测试点 "${stem}" 缺少 ${outName}`);
-		}
-		selectedNames.push(inName, outName);
-	}
 
-	if (selectedNames.length === 0) {
-		throw new UploadError('ZIP 中没有可上传的配对 .in/.out、.set 或 .cpp 文件');
-	}
-
-	let expandedSize = 0;
-	for (const name of selectedNames) {
-		const size = candidates.get(name).header.size;
-		if (!Number.isSafeInteger(size) || size < 0 || size > maxEntrySizeBytes) {
-			throw new UploadError(`文件 ${name} 超过单文件解压限制`);
+		// 2. 强制要求 .set 存在
+		if (!candidates.has('.set')) {
+			throw new UploadError('ZIP 中缺少 .set 评测配置文件');
 		}
-		if (size > maxExpandedSizeBytes - expandedSize) {
-			throw new UploadError('ZIP 解压后总大小超过限制');
-		}
-		expandedSize += size;
-	}
 
-	const files = [];
-	for (const name of selectedNames.sort((a, b) => a.localeCompare(b))) {
-		let data;
+		// 3. 读取 .set（同样受大小限制）
+		let setData;
 		try {
-			data = await readZipEntry(candidates.get(name));
+			setData = await readEntryBoundedSafe(
+				zip, '.set', maxEntrySizeBytes, maxExpandedSizeBytes
+			);
 		} catch (err) {
-			throw new UploadError(`无法解压文件 ${name}: ${err.message}`);
+			throw new UploadError(`无法读取 .set 文件: ${err.message}`);
 		}
-		if (data.length !== candidates.get(name).header.size) {
-			throw new UploadError(`文件 ${name} 的解压大小与 ZIP 元数据不一致`);
+		const setInfo = parseAndValidateSetFile(setData);
+
+		// 4. 仅保留 .set 与 .cpp；.in/.out 只保留 .set 引用的 stem
+		const selectedNames = [];
+		for (const name of candidates.keys()) {
+			if (name === '.set' || name.endsWith('.cpp')) selectedNames.push(name);
 		}
-		files.push({ name, data });
+
+		const referencedStems = new Set();
+		for (const st of setInfo.subtasks) {
+			for (const c of st.cases) referencedStems.add(c.name);
+		}
+		for (const stem of referencedStems) {
+			const inName = `${stem}.in`;
+			const outName = `${stem}.out`;
+			if (!candidates.has(inName)) {
+				throw new UploadError(`.set 引用的测试点 "${stem}" 缺少 ${inName}`);
+			}
+			if (!candidates.has(outName)) {
+				throw new UploadError(`.set 引用的测试点 "${stem}" 缺少 ${outName}`);
+			}
+			selectedNames.push(inName, outName);
+		}
+
+		if (selectedNames.length === 0) {
+			throw new UploadError('ZIP 中没有可上传的配对 .in/.out、.set 或 .cpp 文件');
+		}
+
+		// 5. 基于声明值的快速预过滤
+		let declaredExpandedSize = 0;
+		for (const name of selectedNames) {
+			const entry = candidates.get(name);
+			const size = entry.uncompressedSize;
+			if (!Number.isSafeInteger(size) || size < 0 || size > maxEntrySizeBytes) {
+				throw new UploadError(`文件 ${name} 超过单文件解压限制`);
+			}
+			if (size > maxExpandedSizeBytes - declaredExpandedSize) {
+				throw new UploadError('ZIP 解压后总大小超过限制');
+			}
+			declaredExpandedSize += size;
+		}
+
+		// 6. 逐个流式读取，实时累计实际解压大小
+		const files = [];
+		let actualExpandedSize = 0;
+		for (const name of selectedNames.sort((a, b) => a.localeCompare(b))) {
+			const remaining = maxExpandedSizeBytes - actualExpandedSize;
+			if (remaining <= 0) {
+				throw new UploadError('ZIP 解压后总大小超过限制');
+			}
+			let data;
+			try {
+				data = await readEntryBoundedSafe(
+					zip, name, maxEntrySizeBytes, remaining
+				);
+			} catch (err) {
+				throw new UploadError(`无法读取文件 ${name}: ${err.message}`);
+			}
+			actualExpandedSize += data.length;
+			files.push({ name, data });
+		}
+		return files;
+	} finally {
+		await zip.close();
 	}
-	return files;
 }
 
 function receiveZipUpload(req, res) {

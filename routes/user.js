@@ -100,7 +100,6 @@ router.post('/login', async (req, res) => {
 		const conn = pool.getAccount();
 		const resp = await conn.send('L', packParams([username, fast]));
 		const parts = parsePack(resp.data);
-		console.log(parts[0].toString('utf-8'));
 		if (resp.command === 'Y') {
 			await logger.logSecurity(null, username, ip, 'login_success');
 			return res.json({ status: 'Y', cookie: parts[0].toString('utf8') });
@@ -123,8 +122,6 @@ router.get('/verifycookie', async (req, res) => {
 		const user = await getUserByCookie(cookie);
 		res.json({ status: user ? 'Y' : 'N' });
 	} catch (err) {
-		console.log(err);
-		console.log("Failed");
 		res.json({ status: 'N' });
 	}
 });

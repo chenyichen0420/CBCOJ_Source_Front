@@ -28,7 +28,7 @@ function packParams(arr) {
 	const result = [];
 	for (const item of arr) {
 		const str = String(item);
-		const bytes = Buffer.from(str, 'utf8');
+		const bytes = Buffer.isBuffer(item) ? item : Buffer.from(String(item), 'utf8');
 		const len = bytes.length;
 		if (len <= 128 && len > 0) {
 			result.push(Buffer.from([256 - len]));

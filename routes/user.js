@@ -3,7 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { packParams, parsePack } = require('../db');
 const pool = require('../db');
-const { getUserByCookie, requireLogin, getUserPermissions, requirePermission } = require('../auth');
+const crypto = require('crypto');
+const { getUserByCookie, requireLogin, getUserPermissions, requirePermission, currentNonce, verifyNonce, tryAcquireNonceSlot, SLOT_SECONDS, ALLOWED_PAST_SLOTS } = require('../auth');
 const logger = require('../logger');
 const multer = require('multer');
 const fs = require('fs');
@@ -37,40 +38,79 @@ router.get('/mypermissions', requireLogin, async (req, res) => {
 	res.json({ status: 'Y', permissions: perms });
 });
 
-// ---------- 登录 ----------
+// ---------- 获取登录挑战：nonce + uid（客户端据此自行算 salt） ----------
 router.get('/login', async (req, res) => {
-	const username = req.query.username, password = req.query.password;
-	const ip = logger.getClientIp(req);
+	const username = req.query.username;
 	const unErr = validateString(username, { minLen: 1, maxLen: 100 });
-	if (unErr) {
-		await logger.logSecurity(null, null, ip, 'login_fail', null, 'Missing credentials');
-		return res.json({ status: 'N', error: `username: ${unErr}` });
+	if (unErr) return res.status(400).json({ status: 'N', error: `username: ${unErr}` });
+
+	if (!tryAcquireNonceSlot(username)) {
+		return res.status(429).json({ status: 'N', error: '请求过于频繁，请稍后再试' });
 	}
-	const pwErr = validateString(password, { minLen: 1, maxLen: 100 });
-	if (pwErr) {
-		await logger.logSecurity(null, null, ip, 'login_fail', null, 'Missing credentials');
-		return res.json({ status: 'N', error: `password: ${pwErr}` });
-	}
+
+	let uid = null;
 	try {
-		if (!username || !password) {
-			throw new Error('Missing credentials');
-		}
 		const conn = pool.getAccount();
-		const data = packParams([username, password]);
-		const resp = await conn.send('L', data);
-		const parts = parsePack(resp.data);
+		const resp = await conn.send('U', packParams(['username', username, 'uid']));
 		if (resp.command === 'Y') {
-			const cookie = parts[0].toString('utf8');
-			await logger.logSecurity(null, username, ip, 'login_success');
-			res.json({ status: 'Y', cookie });
-			return;
+			const parts = parsePack(resp.data);
+			if (parts.length >= 1) {
+				const n = parseInt(parts[0].toString('utf8'), 10);
+				if (Number.isInteger(n) && n >= 0) uid = n;
+			}
 		}
-		const errMsg = parts[0].toString('utf8') || 'Login failed';
-		throw new Error(errMsg);
-	   
 	} catch (err) {
-		await logger.logSecurity(null, username, ip, 'login_fail', null, err.message);
-		res.json({ status: 'N', error: err.message });
+		logger.logError(`login nonce: uid lookup failed: ${err.message}`, err);
+	}
+	if (uid === null) uid = crypto.randomInt(0, 2 ** 31);  // 防枚举
+
+	res.json({
+		status: 'Y',
+		nonce: currentNonce(),
+		uid,
+		expiresIn: (ALLOWED_PAST_SLOTS + 1) * SLOT_SECONDS,
+	});
+});
+
+// ---------- 实际登录（POST，凭据不进 URL） ----------
+router.post('/login', async (req, res) => {
+	const ip = logger.getClientIp(req);
+	const { username, nonce, argonval } = req.body || {};
+
+	const unErr = validateString(username, { minLen: 1, maxLen: 100 });
+	const nErr  = validateString(nonce,    { minLen: 3, maxLen: 80 });
+	const aErr  = validateString(argonval, { minLen: 40, maxLen: 60 });
+	if (unErr || nErr || aErr)
+		return res.status(400).json({ status: 'N', error: 'Invalid request' });
+
+	if (verifyNonce(nonce) === null) {
+		await logger.logSecurity(null, null, ip, 'login_fail', null, 'Bad nonce');
+		return res.json({ status: 'N', error: '登录失败' });
+	}
+
+	let argonBytes;
+	try { argonBytes = Buffer.from(argonval, 'base64'); }
+	catch { return res.status(400).json({ status: 'N', error: 'Invalid request' }); }
+	if (argonBytes.length !== 32)
+		return res.status(400).json({ status: 'N', error: 'Invalid request' });
+
+	const fast = crypto.createHash('sha256').update(argonBytes).digest();
+
+	try {
+		const conn = pool.getAccount();
+		const resp = await conn.send('L', packParams([username, fast]));
+		const parts = parsePack(resp.data);
+		console.log(parts[0].toString('utf-8'));
+		if (resp.command === 'Y') {
+			await logger.logSecurity(null, username, ip, 'login_success');
+			return res.json({ status: 'Y', cookie: parts[0].toString('utf8') });
+		}
+		await logger.logSecurity(null, username, ip, 'login_fail', null, 'Middleware rejected');
+		return res.json({ status: 'N', error: '用户名或密码错误' });
+	} catch (err) {
+		logger.logError(`login failed: ${err.message}`, err);
+		await logger.logSecurity(null, username, ip, 'login_fail', null, 'Middleware error');
+		return res.json({ status: 'N', error: '登录失败' });
 	}
 });
 

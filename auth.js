@@ -1,7 +1,56 @@
 const pool = require('./db');
 const { packParams, parsePack } = require('./db');
 const logger = require('./logger');
-const { validateInt, validateString } = require('./validation');
+const { validateInt } = require('./validation');
+const crypto = require('crypto');
+
+const NONCE_SEED = crypto.randomBytes(32);
+const SLOT_SECONDS = 10;
+const ALLOWED_PAST_SLOTS = 6;
+const NONCE_HEX_LEN = 32;
+
+function currentSlot() {
+	return Math.floor(Date.now() / 1000 / SLOT_SECONDS);
+}
+
+function nonceForSlot(slot) {
+	return crypto.createHmac('sha256', NONCE_SEED)
+		.update(String(slot))
+		.digest('hex')
+		.slice(0, NONCE_HEX_LEN);
+}
+
+function currentNonce() {
+	const slot = currentSlot();
+	return `${slot}:${nonceForSlot(slot)}`;
+}
+
+function verifyNonce(nonce) {
+	if (typeof nonce !== 'string') return null;
+	const sep = nonce.indexOf(':');
+	if (sep <= 0 || sep > 12) return null;
+	const slotStr = nonce.slice(0, sep);
+	if (!/^\d+$/.test(slotStr)) return null;
+	const slot = Number(slotStr);
+	if (!Number.isSafeInteger(slot)) return null;
+	const cur = currentSlot();
+	if (slot > cur || slot < cur - ALLOWED_PAST_SLOTS) return null;
+	const expected = `${slot}:${nonceForSlot(slot)}`;
+	const a = Buffer.from(expected, 'utf8');
+	const b = Buffer.from(nonce, 'utf8');
+	if (a.length !== b.length) return null;
+	return crypto.timingSafeEqual(a, b) ? slot : null;
+}
+
+// ---------------- 每 10s 窗口按用户名限流 ----------------
+const nonceRequested = new Set();
+setInterval(() => nonceRequested.clear(), SLOT_SECONDS * 1000).unref();
+
+function tryAcquireNonceSlot(username) {
+	if (nonceRequested.has(username)) return false;
+	nonceRequested.add(username);
+	return true;
+}
 
 const FLAG_SIZE = 6;
 const POS_ADMIN1 = 0;
@@ -229,5 +278,10 @@ module.exports = {
 	checkAdmin,
 	getUserPermissions,
 	requireSuperAdmin,
-	getUserByCookie
+	getUserByCookie,
+	currentNonce,
+	verifyNonce,
+	tryAcquireNonceSlot,
+	SLOT_SECONDS,
+	ALLOWED_PAST_SLOTS
 };

@@ -24,12 +24,12 @@
 
 	<main class="page">
 		<div class="container">
-			<form id="login-form" class="card form-card">
+			<form id="login-form" class="card form-card" autocomplete="on">
 				<label for="username">用户名:</label>
-				<input type="text" id="username" name="username" required>
+				<input type="text" id="username" name="username" required autocomplete="username">
 				<label for="password">密码:</label>
-				<input type="password" id="password" name="password" required>
-				<button type="submit">登录</button>
+				<input type="password" id="password" name="password" required autocomplete="current-password">
+				<button type="submit" id="login-btn">登录</button>
 			</form>
 			<div id="message"></div>
 			<hr>
@@ -38,32 +38,196 @@
 	</main>
 
 	<script type="text/javascript" src="/assets/checklogin.min.js"></script>
+	<script src="/assets/argon2-bundled.min.js"></script>
 	<script>
-		function getSafeNextUrl() {
-			const next = new URLSearchParams(window.location.search).get('next');
-			if (!next) return '/';
-			try {
-				const url = new URL(next, window.location.origin);
-				if (url.origin !== window.location.origin) {
-					return '/';
-				}
-				return url.pathname + url.search + url.hash;
-			} catch (e) {
-				return '/';
+	// ========== 纯 JS SHA-512（FIPS 180-4） ==========
+	const MASK64 = 0xffffffffffffffffn;
+
+	const SHA512_K = [
+		0x428a2f98d728ae22n,0x7137449123ef65cdn,0xb5c0fbcfec4d3b2fn,0xe9b5dba58189dbbcn,
+		0x3956c25bf348b538n,0x59f111f1b605d019n,0x923f82a4af194f9bn,0xab1c5ed5da6d8118n,
+		0xd807aa98a3030242n,0x12835b0145706fben,0x243185be4ee4b28cn,0x550c7dc3d5ffb4e2n,
+		0x72be5d74f27b896fn,0x80deb1fe3b1696b1n,0x9bdc06a725c71235n,0xc19bf174cf692694n,
+		0xe49b69c19ef14ad2n,0xefbe4786384f25e3n,0x0fc19dc68b8cd5b5n,0x240ca1cc77ac9c65n,
+		0x2de92c6f592b0275n,0x4a7484aa6ea6e483n,0x5cb0a9dcbd41fbd4n,0x76f988da831153b5n,
+		0x983e5152ee66dfabn,0xa831c66d2db43210n,0xb00327c898fb213fn,0xbf597fc7beef0ee4n,
+		0xc6e00bf33da88fc2n,0xd5a79147930aa725n,0x06ca6351e003826fn,0x142929670a0e6e70n,
+		0x27b70a8546d22ffcn,0x2e1b21385c26c926n,0x4d2c6dfc5ac42aedn,0x53380d139d95b3dfn,
+		0x650a73548baf63den,0x766a0abb3c77b2a8n,0x81c2c92e47edaee6n,0x92722c851482353bn,
+		0xa2bfe8a14cf10364n,0xa81a664bbc423001n,0xc24b8b70d0f89791n,0xc76c51a30654be30n,
+		0xd192e819d6ef5218n,0xd69906245565a910n,0xf40e35855771202an,0x106aa07032bbd1b8n,
+		0x19a4c116b8d2d0c8n,0x1e376c085141ab53n,0x2748774cdf8eeb99n,0x34b0bcb5e19b48a8n,
+		0x391c0cb3c5c95a63n,0x4ed8aa4ae3418acbn,0x5b9cca4f7763e373n,0x682e6ff3d6b2b8a3n,
+		0x748f82ee5defb2fcn,0x78a5636f43172f60n,0x84c87814a1f0ab72n,0x8cc702081a6439ecn,
+		0x90befffa23631e28n,0xa4506cebde82bde9n,0xbef9a3f7b2c67915n,0xc67178f2e372532bn,
+		0xca273eceea26619cn,0xd186b8c721c0c207n,0xeada7dd6cde0eb1en,0xf57d4f7fee6ed178n,
+		0x06f067aa72176fban,0x0a637dc5a2c898a6n,0x113f9804bef90daen,0x1b710b35131c471bn,
+		0x28db77f523047d84n,0x32caab7b40c72493n,0x3c9ebe0a15c9bebcn,0x431d67c49c100d4cn,
+		0x4cc5d4becb3e42b6n,0x597f299cfc657e2an,0x5fcb6fab3ad6faecn,0x6c44198c4a475817n
+	];
+
+	const SHA512_H0 = [
+		0x6a09e667f3bcc908n,0xbb67ae8584caa73bn,0x3c6ef372fe94f82bn,0xa54ff53a5f1d36f1n,
+		0x510e527fade682d1n,0x9b05688c2b3e6c1fn,0x1f83d9abfb41bd6bn,0x5be0cd19137e2179n
+	];
+
+	function rotr64(x, n) {
+		return ((x >> BigInt(n)) | (x << BigInt(64 - n))) & MASK64;
+	}
+
+	function sha512(bytes) {
+		const bitLen = BigInt(bytes.length) * 8n;
+		// 1 字节 0x80 + 若干 0 + 16 字节长度，总长补到 128 倍数
+		const total = Math.ceil((bytes.length + 1 + 16) / 128) * 128;
+		const msg = new Uint8Array(total);
+		msg.set(bytes);
+		msg[bytes.length] = 0x80;
+		const view = new DataView(msg.buffer);
+		// SHA-512 长度字段是 128 位大端；高 8 字节为 0（输入远小于 2^64 bit）
+		view.setBigUint64(total - 8, bitLen & MASK64);
+
+		const H = SHA512_H0.slice();
+
+		for (let off = 0; off < total; off += 128) {
+			const W = new Array(80);
+			for (let i = 0; i < 16; i++) W[i] = view.getBigUint64(off + i * 8);
+			for (let i = 16; i < 80; i++) {
+				const s0 = rotr64(W[i-15], 1) ^ rotr64(W[i-15], 8) ^ (W[i-15] >> 7n);
+				const s1 = rotr64(W[i-2], 19) ^ rotr64(W[i-2], 61) ^ (W[i-2] >> 6n);
+				W[i] = (W[i-16] + s0 + W[i-7] + s1) & MASK64;
 			}
+
+			let a = H[0], b = H[1], c = H[2], d = H[3];
+			let e = H[4], f = H[5], g = H[6], h = H[7];
+
+			for (let i = 0; i < 80; i++) {
+				const S1 = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
+				const ch = (e & f) ^ ((MASK64 ^ e) & g);
+				const t1 = (h + S1 + ch + SHA512_K[i] + W[i]) & MASK64;
+				const S0 = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
+				const maj = (a & b) ^ (a & c) ^ (b & c);
+				const t2 = (S0 + maj) & MASK64;
+				h = g; g = f; f = e; e = (d + t1) & MASK64;
+				d = c; c = b; b = a; a = (t1 + t2) & MASK64;
+			}
+
+			H[0] = (H[0] + a) & MASK64; H[1] = (H[1] + b) & MASK64;
+			H[2] = (H[2] + c) & MASK64; H[3] = (H[3] + d) & MASK64;
+			H[4] = (H[4] + e) & MASK64; H[5] = (H[5] + f) & MASK64;
+			H[6] = (H[6] + g) & MASK64; H[7] = (H[7] + h) & MASK64;
 		}
-		document.getElementById('login-form').addEventListener('submit', async (e) => {
-			e.preventDefault();
-			const formData = new FormData(e.target);
-			const resp = await fetch('/api/login?' + new URLSearchParams(formData));
-			const data = await resp.json();
-			if (data.status === 'Y') {
-				document.cookie = `user_cookie=${data.cookie}; path=/`;
-				window.location.href = getSafeNextUrl();
-			} else {
-				document.getElementById('message').textContent = '登录失败: ' + data.error;
-			}
+
+		const out = new Uint8Array(64);
+		const ov = new DataView(out.buffer);
+		for (let i = 0; i < 8; i++) ov.setBigUint64(i * 8, H[i]);
+		return out;
+	}
+
+	// ========== salt = SHA512(splitmix64^10(uid+1) 的小端 8 字节) ==========
+	function splitmix64(x) {
+		x = (x + 0x9e3779b97f4a7c15n) & MASK64;
+		x = ((x ^ (x >> 30n)) * 0xbf58476d1ce4e5b9n) & MASK64;
+		x = ((x ^ (x >> 27n)) * 0x94d049bb133111ebn) & MASK64;
+		return (x ^ (x >> 31n)) & MASK64;
+	}
+
+	function saltOfUid(uid) {
+		let x = BigInt(uid + 1);
+		for (let i = 0; i < 10; i++) x = splitmix64(x);
+		const buf = new Uint8Array(8);
+		for (let i = 0; i < 8; i++) { buf[i] = Number(x & 0xffn); x >>= 8n; }
+		return sha512(buf);
+	}
+
+	// ========== 工具 ==========
+	function u8ToBase64(u8) {
+		let bin = '';
+		const chunk = 0x8000;
+		for (let i = 0; i < u8.length; i += chunk)
+			bin += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+		return btoa(bin);
+	}
+
+	function getSafeNextUrl() {
+		const next = new URLSearchParams(window.location.search).get('next');
+		if (!next) return '/';
+		try {
+			const url = new URL(next, window.location.origin);
+			if (url.origin !== window.location.origin) return '/';
+			return url.pathname + url.search + url.hash;
+		} catch (e) { return '/'; }
+	}
+
+	function setMessage(text, isError) {
+		const el = document.getElementById('message');
+		el.textContent = text || '';
+		el.style.color = isError ? '#c00' : '#080';
+	}
+
+	// ========== 登录流程 ==========
+	async function login(username, password) {
+		// 1. 获取 nonce + uid
+		const nResp = await fetch('/api/login?' + new URLSearchParams({ username }));
+		const n = await nResp.json();
+		if (n.status !== 'Y') throw new Error(n.error || '无法获取登录挑战');
+
+		// 2. 本地算 salt（纯 JS，不依赖 WebCrypto）
+		const saltBytes = saltOfUid(n.uid);
+
+		// 3. 本地 Argon2id
+		const r = await argon2.hash({
+			pass: password,
+			salt: saltBytes,
+			time: 4,
+			mem: 64 * 1024,
+			parallelism: 4,
+			hashLen: 32,
+			type: argon2.ArgonType.Argon2id
 		});
+
+		// 4. POST 登录
+		const lResp = await fetch('/api/login', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				username,
+				nonce: n.nonce,
+				argonval: u8ToBase64(r.hash)
+			})
+		});
+		const l = await lResp.json();
+		if (l.status !== 'Y') throw new Error(l.error || '登录失败');
+		return l.cookie;
+	}
+
+	document.getElementById('login-form').addEventListener('submit', async (e) => {
+		e.preventDefault();
+		const form = e.target;
+		const btn = document.getElementById('login-btn');
+		const username = form.username.value.trim();
+		const password = form.password.value;
+
+		if (!username || !password) { setMessage('请填写用户名和密码', true); return; }
+		if (typeof argon2 === 'undefined') {
+			setMessage('密码学库加载失败，请刷新页面重试', true); return;
+		}
+
+		btn.disabled = true;
+		btn.textContent = '核验中...';
+		setMessage('');
+
+		try {
+			const cookie = await login(username, password);
+			document.cookie = `user_cookie=${cookie}; path=/; SameSite=Strict`;
+			window.location.href = getSafeNextUrl();
+		} catch (err) {
+			setMessage('登录失败: ' + (err.message || err), true);
+		} finally {
+			btn.disabled = false;
+			btn.textContent = '登录';
+			form.password.value = '';
+		}
+	});
 	</script>
 </body>
 </html>

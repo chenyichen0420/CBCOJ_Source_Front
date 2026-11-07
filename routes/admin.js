@@ -65,6 +65,9 @@ const uploadZip = multer({
 });
 
 function getCandidateName(entryName) {
+	if (typeof entryName !== 'string') {
+		throw new UploadError('ZIP 中包含无效的数据文件名');
+	}
 	const normalized = entryName.replace(/\\/g, '/');
 	const name = normalized.slice(normalized.lastIndexOf('/') + 1);
 	const isCandidate = name === '.set' || name.endsWith('.cpp') || name.endsWith('.in') || name.endsWith('.out');
@@ -212,7 +215,7 @@ async function readEntryBoundedSafe(zip, entryName, maxEntryBytes, remainingTota
 		throw new UploadError(`ZIP 中缺少条目 ${entryName}`);
 	}
 
-	const declaredSize = entry.uncompressedSize;
+	const declaredSize = entry.size;
 	if (!Number.isSafeInteger(declaredSize) || declaredSize < 0) {
 		throw new UploadError(`文件 ${entryName} 的元数据大小无效`);
 	}
@@ -262,7 +265,7 @@ async function extractWhitelistedFiles(zipPath) {
 			}
 			if (entry.isDirectory) continue;
 
-			const name = getCandidateName(entry.fileName);
+			const name = getCandidateName(entry.name);
 			if (!name ||
 				(name.endsWith('.in') && name.length === 3) ||
 				(name.endsWith('.out') && name.length === 4) ||
@@ -320,7 +323,7 @@ async function extractWhitelistedFiles(zipPath) {
 		let declaredExpandedSize = 0;
 		for (const name of selectedNames) {
 			const entry = candidates.get(name);
-			const size = entry.uncompressedSize;
+			const size = entry.size;
 			if (!Number.isSafeInteger(size) || size < 0 || size > maxEntrySizeBytes) {
 				throw new UploadError(`文件 ${name} 超过单文件解压限制`);
 			}

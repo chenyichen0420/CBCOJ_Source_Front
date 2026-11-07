@@ -164,6 +164,29 @@
 		el.style.color = isError ? '#c00' : '#080';
 	}
 
+	// ========== 已登录则直接跳转到 next ==========
+	(async function redirectIfLoggedIn() {
+		// 读取 user_cookie
+		const m = document.cookie.match(/(?:^|;\s*)user_cookie=([^;]*)/);
+		const cookie = m ? decodeURIComponent(m[1]) : '';
+		if (!cookie) return;
+
+		try {
+			const resp = await fetch('/api/verifycookie?cookie=' + encodeURIComponent(cookie));
+			const result = await resp.json();
+			if (result.status === 'Y') {
+				// 已登录，直接跳转到安全的 next
+				window.location.replace(getSafeNextUrl());
+			} else {
+				// cookie 无效，顺手清掉，避免反复无效请求
+				document.cookie = 'user_cookie=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict';
+			}
+		} catch (e) {
+			// 网络/接口错误时不阻塞登录页，继续显示表单
+			console.error('redirectIfLoggedIn error:', e);
+		}
+	})();
+
 	// ========== 登录流程 ==========
 	async function login(username, password) {
 		// 1. 获取 nonce + uid

@@ -732,6 +732,39 @@ async function accountRequest(command, params) {
 	return pool.parsePack(response.data);
 }
 
+router.get('/registration-verifier', requireSuperAdmin, async (req, res) => {
+	try {
+		const parts = await accountRequest('X', [req.userCookie]);
+		if (parts.length !== 1 || !/^\d+$/.test(parts[0].toString('utf8'))) {
+			throw new Error('账户服务返回了无效的验证 UID');
+		}
+		const uid = Number(parts[0].toString('utf8'));
+		if (!Number.isSafeInteger(uid) || uid < 0 || uid >= (1 << 23)) {
+			throw new Error('账户服务返回了超出范围的验证 UID');
+		}
+		res.json({ status: 'Y', uid });
+	} catch (err) {
+		logger.logError(`Failed to get registration verifier UID: ${err.message}`, err);
+		res.status(502).json({ status: 'N', error: '读取注册验证 UID 失败' });
+	}
+});
+
+router.post('/registration-verifier', requireSuperAdmin, async (req, res) => {
+	const uidError = validateInt(req.body && req.body.uid, { min: 1, max: (1 << 23) - 1 });
+	if (uidError) return res.status(400).json({ status: 'N', error: `Luogu UID: ${uidError}` });
+	try {
+		const uid = Number(req.body.uid);
+		const parts = await accountRequest('X', [req.userCookie, String(uid)]);
+		if (parts.length !== 1 || parts[0].toString('utf8') !== String(uid)) {
+			throw new Error('账户服务返回的验证 UID 与请求不一致');
+		}
+		res.json({ status: 'Y', uid });
+	} catch (err) {
+		logger.logError(`Failed to update registration verifier UID: ${err.message}`, err);
+		res.status(502).json({ status: 'N', error: '更新注册验证 UID 失败' });
+	}
+});
+
 async function getManagedUser(id) {
 	const parts = await accountRequest('U', [
 		'uid', String(id), 'uid', 'username', 'flag', 'role', 'badge', 'name_color'

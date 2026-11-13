@@ -54,9 +54,13 @@
 | 接口 | 方法 | 当前实现 | 改造方式 | 中间件命令 |
 |------|------|---------|---------|-----------|
 | `/login` | GET | SQL 查询 `users` 表 | 对接中间件 | Account Service `L` |
-| `/verifycookie` | GET | SQL 查询 `users.cookie` | 对接中间件 | Account Service `V` |
-| `/genregtoken` | GET | SQL INSERT `register_tokens` + 发邮件 | 对接中间件 | Account Service `P`（pre-register） |
-| `/verifycode` | GET | SQL 查询 + INSERT `users` | 对接中间件 | Account Service `R`（register） |
+| `/verifycookie` | GET | 中间件按 cookie 查询用户 | 对接中间件 | Account Service `U` |
+| `/genregtoken` | POST | 创建注册挑战并返回中间件配置的验证 Luogu UID | 对接中间件 | Account Service `P`（创建随机挑战） |
+| `/verifycode` | POST | 排队请求并查询验证状态 | 对接中间件 | Account Service `V` |
+| `/setregpassword` | POST | 验证后一次性设置密码并完成注册 | 对接中间件 | Account Service `W` |
+| `/registration-verifier` | GET/POST | superadmin 查看或修改注册私信验证 UID | 对接中间件 | Account Service `X`（写入 `basic_setting.ini` 并即时更新） |
+
+注册私信验证账号 UID 从 middleware 工作目录的 `basic_setting.ini` 读取，位于现有数据库路径及四个端口配置之后；superadmin 可通过管理界面更新。Account `P` 将其返回给前端，UpdateSession `B`/`G` 要求 daemon 提交相同 UID，否则拒绝读取任务或提交验证结果。
 | `/mypermissions` | GET | SQL 查询 `user_permissions` | 对接中间件 | `accmng` 解析 `flag` 字段 |
 | `/getinfoshort` | GET | SQL 查询 `users` | 对接中间件 | `accmng.get_safe` + `ache` |
 | `/updinfoshort` | POST | SQL UPDATE `users` | 对接中间件 | Account Service `S` / `1` / `2` |

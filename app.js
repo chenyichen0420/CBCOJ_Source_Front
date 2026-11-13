@@ -821,6 +821,13 @@ app.get('/login', async (req, res) => {
 	res.render('login', { navigation: nav, user: req.user });
 });
 
+// 注册页面
+app.get('/register', async (req, res) => {
+	const isAdmin = await checkAdmin(req);
+	const nav = isAdmin ? navigationAdmin : navigation;
+	res.render('register', { navigation: nav, user: req.user });
+});
+
 // 管理后台页面
 app.get('/admin', requireLoginPage, async (req, res) => {
 	const isAdmin = await checkAdmin(req);

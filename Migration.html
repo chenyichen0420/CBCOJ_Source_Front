@@ -316,21 +316,38 @@
 <td>GET</td>
 <td>SQL 查询 <code>users.cookie</code></td>
 <td>对接中间件</td>
-<td>Account Service <code>V</code></td>
+<td>Account Service <code>U</code>（按 cookie 查询）</td>
 </tr>
 <tr>
 <td><code>/genregtoken</code></td>
-<td>GET</td>
-<td>SQL INSERT <code>register_tokens</code> + 发邮件</td>
+<td>POST</td>
+<td>创建随机注册挑战并返回中间件配置的验证 Luogu UID</td>
 <td>对接中间件</td>
-<td>Account Service <code>P</code>（pre-register）</td>
+<td>Account Service <code>P</code></td>
 </tr>
 <tr>
 <td><code>/verifycode</code></td>
-<td>GET</td>
-<td>SQL 查询 + INSERT <code>users</code></td>
+<td>POST</td>
+<td>提交校验请求并查询验证状态</td>
 <td>对接中间件</td>
-<td>Account Service <code>R</code>（register）</td>
+<td>Account Service <code>V</code></td>
+</tr>
+<tr>
+<td><code>/setregpassword</code></td>
+<td>POST</td>
+<td>验证后一次性设置密码并完成注册</td>
+<td>对接中间件</td>
+<td>Account Service <code>W</code></td>
+</tr>
+<tr>
+<td><code>/registration-verifier</code></td>
+<td>GET/POST</td>
+<td>superadmin 查看或修改注册私信验证 UID</td>
+<td>对接中间件</td>
+<td>Account Service <code>X</code>（写入 <code>basic_setting.ini</code> 并即时更新）</td>
+</tr>
+<tr>
+<td colspan="5">注册验证账号 UID 从 middleware 工作目录的 <code>basic_setting.ini</code> 读取，位于现有数据库路径及四个端口配置之后；superadmin 可通过管理界面更新。Account <code>P</code> 将其返回给前端，UpdateSession <code>B</code>/<code>G</code> 要求 daemon 提交相同 UID，否则拒绝读取任务或提交验证结果。</td>
 </tr>
 <tr>
 <td><code>/mypermissions</code></td>

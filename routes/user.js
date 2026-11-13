@@ -10,7 +10,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const util = require('util');
-const { validateInt, validateString, validateEmail, validateBoolean, contentLengthGuard } = require('../validation');
+const { validateInt, validateString, validateBoolean, contentLengthGuard } = require('../validation');
 
 const MAX_FORM_BODY_BYTES = 128 * 1024;
 const MAX_FILE_UPLOAD_BYTES = 16 * 1024 * 1024;
@@ -223,67 +223,113 @@ router.post('/updinfoshort', requireLogin, contentLengthGuard(MAX_FORM_BODY_BYTE
 	}
 });
 
-var reglasttime = {};
+const reglasttime = new Map();
 
-// 生成注册验证码
-router.get('/genregtoken', async (req, res) => {
-	return res.json({status:'N',error:"register not supported currently"});
-	//暂时不支持注册用户
-	const { email, username, password } = req.query;
-	const emErr = validateEmail(email);
-	if (emErr) return res.json({ status: 'N', error: `email: ${emErr}` });
-	const unErr = validateString(username, { minLen: 1, maxLen: 100 });
-	if (unErr) return res.json({ status: 'N', error: `username: ${unErr}` });
-	const pwErr = validateString(password, { minLen: 1, maxLen: 100 });
-	if (pwErr) return res.json({ status: 'N', error: `password: ${pwErr}` });
-	
-	if (Date.now() / 1000 - reglasttime[req.ip] < 60) {
-	   return res.json({ status: 'N', error: `too fast. please wait for at least ${60 - (Date.now() / 1000 - reglasttime[req.ip])} seconds`});
+router.post('/genregtoken', async (req, res) => {
+	const { username, lguid } = req.body || {};
+	const unErr = validateString(username, { minLen: 1, maxLen: 16, pattern: /^[A-Za-z0-9]+$/ });
+	const uidErr = validateInt(lguid, { min: 1, max: (1 << 23) - 1 });
+	if (unErr || uidErr) return res.status(400).json({ status: 'N', error: unErr ? `username: ${unErr}` : `Luogu UID: ${uidErr}` });
+	if (!/[A-Za-z]/.test(username)) return res.status(400).json({ status: 'N', error: '用户名必须至少包含一个英文字母' });
+
+	const ip = logger.getClientIp(req);
+	const now = Date.now();
+	const lastRequest = reglasttime.get(ip) || 0;
+	if (now - lastRequest < 60_000) {
+		return res.status(429).json({
+			status: 'N',
+			error: `请求过于频繁，请在 ${Math.ceil((60_000 - (now - lastRequest)) / 1000)} 秒后重试`
+		});
 	}
-	
-	reglasttime[req.ip] = Date.now() / 1000;
-	
-	/*
-	DB Interface, waiting for implement
+	for (const [key, timestamp] of reglasttime) {
+		if (now - timestamp > 60 * 60_000) reglasttime.delete(key);
+	}
+	if (!reglasttime.has(ip) && reglasttime.size >= 10_000)
+		reglasttime.delete(reglasttime.keys().next().value);
+	reglasttime.set(ip, now);
 
-	Input: email (string), username (string), password (string)
-	Output: { status: 'Y', token: string } | { status: 'N', error: string }
-
-	Expected middleware behavior:
-	- Check if email already registered → return error if exists
-	- Generate a random 8-digit verification code
-	- Generate a token (for later verification)
-	- Store (email, username, password, token, code) temporarily (expires after 30 min)
-	- The actual email sending is done by the separate email module (call sentemail.sentRegisterToken)
-	- Return token to client
-	*/
+	try {
+		const conn = pool.getAccount();
+		const response = await conn.send('P', packParams([username, String(lguid)]));
+		const parts = parsePack(response.data);
+		if (response.command !== 'Y' || parts.length < 3) {
+			const error = parts[0] ? parts[0].toString('utf8') : '无法创建注册申请';
+			return res.json({ status: 'N', error });
+		}
+		const token = parts[0].toString('utf8');
+		const code = parts[1].toString('utf8');
+		const recipientUid = parts[2].toString('utf8');
+		if (!/^[a-f0-9]{64}$/.test(token) || !/^[a-f0-9]{16}$/.test(code) ||
+			!/^[1-9]\d*$/.test(recipientUid) || Number(recipientUid) >= (1 << 23))
+			return res.status(502).json({ status: 'N', error: '注册服务返回了无效挑战信息' });
+		return res.json({
+			status: 'Y',
+			token,
+			code,
+			recipientUid
+		});
+	} catch (error) {
+		logger.logError(`registration challenge failed: ${error.message}`, error);
+		return res.status(503).json({ status: 'N', error: '注册服务暂不可用' });
+	}
 });
 
-// 验证注册码并创建用户
-router.get('/verifycode', async (req, res) => {
-	return res.json({status:'N',error:"register not supported currently"});
-	//暂时不支持注册用户
-	const { code, token } = req.query;
-	const ip = logger.getClientIp(req);
-	const codeErr = validateString(code, { minLen: 1, maxLen: 50 });
-	if (codeErr) return res.json({ status: 'N', error: `code: ${codeErr}` });
-	const tkErr = validateString(token, { minLen: 1, maxLen: 100 });
-	if (tkErr) return res.json({ status: 'N', error: `token: ${tkErr}` });
-	/*
-	DB Interface, waiting for implement
+router.post('/setregpassword', async (req, res) => {
+	const { token, argonval } = req.body || {};
+	const tokenErr = validateString(token, { minLen: 64, maxLen: 64, pattern: /^[a-f0-9]{64}$/ });
+	const hashErr = validateString(argonval, { minLen: 44, maxLen: 44 });
+	if (tokenErr || hashErr) return res.status(400).json({ status: 'N', error: 'Invalid registration request' });
 
-	Input: code (string, 8-digit), token (string)
-	Output: { status: 'Y' } | { status: 'N', error: string }
+	const argonHash = Buffer.from(argonval, 'base64');
+	if (argonHash.length !== 32 || argonHash.toString('base64') !== argonval)
+		return res.status(400).json({ status: 'N', error: 'Invalid password hash' });
+	const passwordHash = crypto.createHash('sha256').update(argonHash).digest();
+	try {
+		const conn = pool.getAccount();
+		const response = await conn.send('W', packParams([token, passwordHash]));
+		const parts = parsePack(response.data);
+		if (response.command !== 'Y') {
+			const stateResponse = await conn.send('V', packParams([token]));
+			const stateParts = parsePack(stateResponse.data);
+			if (stateResponse.command === 'Y' &&
+				stateParts[0] && stateParts[0].toString('utf8') === 'COMPLETED')
+				return res.json({ status: 'Y' });
+			return res.json({ status: 'N', error: parts[0] ? parts[0].toString('utf8') : '无法保存密码' });
+		}
+		return res.json({ status: 'Y' });
+	} catch (error) {
+		logger.logError(`registration password setup failed: ${error.message}`, error);
+		return res.status(503).json({ status: 'N', error: '注册服务暂不可用' });
+	}
+});
 
-	Expected middleware behavior:
-	- Verify token + code match a pending registration record
-	- Check if username already exists → return error
-	- Create new user account with provided username/password/email
-	- Generate cookie for the new user
-	- Delete the pending registration record
-	- Log the registration (security log)
-	- Return success
-	*/
+router.post('/verifycode', async (req, res) => {
+	const { token } = req.body || {};
+	const tokenErr = validateString(token, { minLen: 64, maxLen: 64, pattern: /^[a-f0-9]{64}$/ });
+	if (tokenErr) return res.status(400).json({ status: 'N', error: 'Invalid registration token' });
+
+	try {
+		const conn = pool.getAccount();
+		const response = await conn.send('V', packParams([token]));
+		const parts = parsePack(response.data);
+		if (response.command !== 'Y') {
+			const error = parts[0] ? parts[0].toString('utf8') : '注册校验失败';
+			return res.json({ status: 'N', error });
+		}
+		const state = parts[0] ? parts[0].toString('utf8') : '';
+		if (state === 'PENDING') return res.json({ status: 'P', message: '等待下一轮 Luogu 私信检查' });
+		if (state === 'FAILED') return res.json({ status: 'N', error: '私信验证码不匹配或注册申请已失效' });
+		if (state === 'COMPLETED') return res.json({ status: 'Y' });
+		if (state !== 'VERIFIED' || parts.length < 2)
+			return res.json({ status: 'N', error: '无效的注册校验状态' });
+		const accountUid = Number(parts[1].toString('utf8'));
+		if (!Number.isSafeInteger(accountUid) || accountUid < 0)
+			return res.status(502).json({ status: 'N', error: '注册服务返回了无效账号编号' });
+		return res.json({ status: 'V', accountUid });
+	} catch (error) {
+		logger.logError(`registration verification failed: ${error.message}`, error);
+		return res.status(503).json({ status: 'N', error: '注册校验服务暂不可用' });
+	}
 });
 
 // 导出在文件末尾（在附加路由之后）
@@ -402,8 +448,9 @@ module.exports = router;
 | `/verifycookie` | GET | 替换原 `pool.query` | Cookie 有效性验证 |
 | `/getinfoshort` | GET | 替换原 `pool.query` | 多方式用户信息查询 |
 | `/updinfoshort` | POST | 替换原 `pool.query` | 更新用户个人信息 |
-| `/genregtoken` | GET | 替换原 `pool.query` | 预注册 + 验证码生成 |
-| `/verifycode` | GET | 替换原 `pool.query` | 验证码验证 + 用户创建 |
+| `/genregtoken` | POST | 对接中间件 `P` | 创建注册挑战与私信验证码 |
+| `/setregpassword` | POST | 对接中间件 `W` | 认证后一次性设置密码并完成注册 |
+| `/verifycode` | POST | 对接中间件 `V` | 申请批量校验并查询认证状态 |
 | `/problem/new` | POST | 替换原 `pool.query` | 创建新题目 |
 | `/problem/:id/upload-data` | POST | 替换原 `pool.query` | 上传题目数据包 |
 | `/problem/:id/upload-checker` | POST | 属于题目数据包，已经删除 | 上传并编译检查器 |

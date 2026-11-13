@@ -32,25 +32,29 @@
                     <form class="register-form" id="register-form">
                         <div class="form-group">
                             <label for="username">用户名</label>
-                            <input type="text" id="username" required>
+                            <input type="text" id="username" maxlength="16" required>
                             <label for="password">密码</label>
-                            <input type="password" id="password" required>
-                            <label for="email">邮箱</label>
-                            <input type="email" id="email" required>
-                            <button type="button" class="btn" id="sendCodeButton">发送验证代码到邮箱</button>
-                            <label for="code">验证代码</label>
-                            <input type="text" id="code" required>
+                            <input type="password" id="password" required autocomplete="new-password">
+                            <label for="lguid">Luogu UID</label>
+                            <input type="number" id="lguid" min="1" required>
+                            <button type="button" class="btn" id="sendCodeButton">生成私信验证码</button>
+                            <div id="reg-challenge" hidden>
+                                <p>请从此 Luogu 账号向 <a id="verifier-chat-link" target="_blank" rel="noopener noreferrer">CBCOJ 注册验证账号</a> 发送以下完整验证码（正文必须完全一致）：</p>
+                                <code id="reg-code"></code>
+                                <p>验证码有效期为 15 分钟。发送后点击下方按钮；页面每 10 秒提交校验请求。Luogu 账号认证成功后，系统才分配 CBCOJ UID，并据此设置密码；密码设置令牌只能使用一次。</p>
+                                <button type="button" class="btn" id="verifyButton">我已发送，开始校验</button>
+                            </div>
+                            <p id="register-status" role="status"></p>
                         </div>
-                        <button type="submit" class="btn">注册</button>
                     </form>
                 </div>
                 <div class="right card">
                     <h2>注册流程</h2>
                     <ol>
-                        <li>填写注册表单，提供用户名、密码和邮箱</li>
-                        <li>点击发送验证代码，系统会向您的邮箱发送验证码</li>
-                        <li>填入验证码后点击注册</li>
-                        <li>注册成功后，您可以立即登录并开始使用 CBCOJ 的各种功能</li>
+                        <li>填写用户名、密码和 Luogu UID，生成一次性私信验证码</li>
+                        <li>从该 Luogu 账号将验证码作为完整正文发送给 CBCOJ 注册验证账号</li>
+                        <li>点击“我已发送，开始校验”，页面每 10 秒提交校验请求</li>
+                        <li>校验程序每分钟批量检查近期私信；认证成功后分配 UID，页面据此设置密码并完成注册</li>
                     </ol>
                 </div>
             </div>
@@ -58,34 +62,237 @@
     </main>
 
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script src="/assets/argon2-bundled.min.js"></script>
     <script>
         let token = '';
-        document.getElementById('sendCodeButton').addEventListener('click', async () => {
-            const email = document.getElementById('email').value;
-            const username = document.getElementById('username').value;
+        let pollTimer = null;
+        let pollInFlight = false;
+        const statusElement = document.getElementById('register-status');
+        const sendButton = document.getElementById('sendCodeButton');
+        const verifyButton = document.getElementById('verifyButton');
+
+        function setStatus(message, error = false) {
+            statusElement.textContent = message;
+            statusElement.style.color = error ? '#c00' : '';
+        }
+
+        const MASK64 = 0xffffffffffffffffn;
+        const SHA512_K = [
+            0x428a2f98d728ae22n,0x7137449123ef65cdn,0xb5c0fbcfec4d3b2fn,0xe9b5dba58189dbbcn,
+            0x3956c25bf348b538n,0x59f111f1b605d019n,0x923f82a4af194f9bn,0xab1c5ed5da6d8118n,
+            0xd807aa98a3030242n,0x12835b0145706fben,0x243185be4ee4b28cn,0x550c7dc3d5ffb4e2n,
+            0x72be5d74f27b896fn,0x80deb1fe3b1696b1n,0x9bdc06a725c71235n,0xc19bf174cf692694n,
+            0xe49b69c19ef14ad2n,0xefbe4786384f25e3n,0x0fc19dc68b8cd5b5n,0x240ca1cc77ac9c65n,
+            0x2de92c6f592b0275n,0x4a7484aa6ea6e483n,0x5cb0a9dcbd41fbd4n,0x76f988da831153b5n,
+            0x983e5152ee66dfabn,0xa831c66d2db43210n,0xb00327c898fb213fn,0xbf597fc7beef0ee4n,
+            0xc6e00bf33da88fc2n,0xd5a79147930aa725n,0x06ca6351e003826fn,0x142929670a0e6e70n,
+            0x27b70a8546d22ffcn,0x2e1b21385c26c926n,0x4d2c6dfc5ac42aedn,0x53380d139d95b3dfn,
+            0x650a73548baf63den,0x766a0abb3c77b2a8n,0x81c2c92e47edaee6n,0x92722c851482353bn,
+            0xa2bfe8a14cf10364n,0xa81a664bbc423001n,0xc24b8b70d0f89791n,0xc76c51a30654be30n,
+            0xd192e819d6ef5218n,0xd69906245565a910n,0xf40e35855771202an,0x106aa07032bbd1b8n,
+            0x19a4c116b8d2d0c8n,0x1e376c085141ab53n,0x2748774cdf8eeb99n,0x34b0bcb5e19b48a8n,
+            0x391c0cb3c5c95a63n,0x4ed8aa4ae3418acbn,0x5b9cca4f7763e373n,0x682e6ff3d6b2b8a3n,
+            0x748f82ee5defb2fcn,0x78a5636f43172f60n,0x84c87814a1f0ab72n,0x8cc702081a6439ecn,
+            0x90befffa23631e28n,0xa4506cebde82bde9n,0xbef9a3f7b2c67915n,0xc67178f2e372532bn,
+            0xca273eceea26619cn,0xd186b8c721c0c207n,0xeada7dd6cde0eb1en,0xf57d4f7fee6ed178n,
+            0x06f067aa72176fban,0x0a637dc5a2c898a6n,0x113f9804bef90daen,0x1b710b35131c471bn,
+            0x28db77f523047d84n,0x32caab7b40c72493n,0x3c9ebe0a15c9bebcn,0x431d67c49c100d4cn,
+            0x4cc5d4becb3e42b6n,0x597f299cfc657e2an,0x5fcb6fab3ad6faecn,0x6c44198c4a475817n
+        ];
+        const SHA512_H0 = [
+            0x6a09e667f3bcc908n,0xbb67ae8584caa73bn,0x3c6ef372fe94f82bn,0xa54ff53a5f1d36f1n,
+            0x510e527fade682d1n,0x9b05688c2b3e6c1fn,0x1f83d9abfb41bd6bn,0x5be0cd19137e2179n
+        ];
+
+        function rotr64(value, bits) {
+            return ((value >> BigInt(bits)) | (value << BigInt(64 - bits))) & MASK64;
+        }
+
+        function sha512(bytes) {
+            const bitLength = BigInt(bytes.length) * 8n;
+            const totalLength = Math.ceil((bytes.length + 17) / 128) * 128;
+            const message = new Uint8Array(totalLength);
+            message.set(bytes);
+            message[bytes.length] = 0x80;
+            const view = new DataView(message.buffer);
+            view.setBigUint64(totalLength - 8, bitLength);
+            const hash = SHA512_H0.slice();
+
+            for (let offset = 0; offset < totalLength; offset += 128) {
+                const words = new Array(80);
+                for (let i = 0; i < 16; i++) words[i] = view.getBigUint64(offset + i * 8);
+                for (let i = 16; i < 80; i++) {
+                    const s0 = rotr64(words[i - 15], 1) ^ rotr64(words[i - 15], 8) ^ (words[i - 15] >> 7n);
+                    const s1 = rotr64(words[i - 2], 19) ^ rotr64(words[i - 2], 61) ^ (words[i - 2] >> 6n);
+                    words[i] = (words[i - 16] + s0 + words[i - 7] + s1) & MASK64;
+                }
+
+                let [a, b, c, d, e, f, g, h] = hash;
+                for (let i = 0; i < 80; i++) {
+                    const sum1 = rotr64(e, 14) ^ rotr64(e, 18) ^ rotr64(e, 41);
+                    const choice = (e & f) ^ ((MASK64 ^ e) & g);
+                    const temp1 = (h + sum1 + choice + SHA512_K[i] + words[i]) & MASK64;
+                    const sum0 = rotr64(a, 28) ^ rotr64(a, 34) ^ rotr64(a, 39);
+                    const majority = (a & b) ^ (a & c) ^ (b & c);
+                    const temp2 = (sum0 + majority) & MASK64;
+                    h = g; g = f; f = e; e = (d + temp1) & MASK64;
+                    d = c; c = b; b = a; a = (temp1 + temp2) & MASK64;
+                }
+                hash[0] = (hash[0] + a) & MASK64; hash[1] = (hash[1] + b) & MASK64;
+                hash[2] = (hash[2] + c) & MASK64; hash[3] = (hash[3] + d) & MASK64;
+                hash[4] = (hash[4] + e) & MASK64; hash[5] = (hash[5] + f) & MASK64;
+                hash[6] = (hash[6] + g) & MASK64; hash[7] = (hash[7] + h) & MASK64;
+            }
+
+            const output = new Uint8Array(64);
+            const outputView = new DataView(output.buffer);
+            for (let i = 0; i < hash.length; i++) outputView.setBigUint64(i * 8, hash[i]);
+            return output;
+        }
+
+        function splitmix64(value) {
+            value = (value + 0x9e3779b97f4a7c15n) & MASK64;
+            value = ((value ^ (value >> 30n)) * 0xbf58476d1ce4e5b9n) & MASK64;
+            value = ((value ^ (value >> 27n)) * 0x94d049bb133111ebn) & MASK64;
+            return (value ^ (value >> 31n)) & MASK64;
+        }
+
+        function saltOfUid(uid) {
+            let value = BigInt(uid) + 1n;
+            for (let i = 0; i < 10; i++) value = splitmix64(value);
+            const bytes = new Uint8Array(8);
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = Number(value & 0xffn);
+                value >>= 8n;
+            }
+            return sha512(bytes);
+        }
+
+        function toBase64(bytes) {
+            let binary = '';
+            for (const byte of bytes) binary += String.fromCharCode(byte);
+            return btoa(binary);
+        }
+
+        async function postJson(url, body) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const result = await response.json();
+            if (response.status >= 500) throw new Error(result.error || '服务暂不可用');
+            return result;
+        }
+
+        document.getElementById('register-form').addEventListener('submit', event => event.preventDefault());
+
+        sendButton.addEventListener('click', async () => {
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = null;
+            token = '';
+            verifyButton.disabled = true;
+            document.getElementById('reg-challenge').hidden = true;
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
-            if (!email || !username || !password) { alert('请先填写完整信息'); return; }
-            const resp = await fetch(`/api/genregtoken?email=${encodeURIComponent(email)}&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
-            const data = await resp.json();
-            if (data.status === 'Y') {
-                alert('验证代码已发送到您的邮箱');
-                token = data.token;
-            } else {
-                alert('发送失败: ' + data.error);
+            document.getElementById('username').disabled = false;
+            document.getElementById('password').disabled = false;
+            document.getElementById('lguid').disabled = false;
+            const lguidText = document.getElementById('lguid').value;
+            const lguid = Number(lguidText);
+            if (!username || !password || !/^[1-9]\d*$/.test(lguidText) || !Number.isSafeInteger(lguid)) {
+                setStatus('请正确填写用户名、密码和 Luogu UID。', true);
+                return;
+            }
+            if (typeof argon2 === 'undefined') {
+                setStatus('Argon2 组件不可用，请刷新页面后重试。', true);
+                return;
+            }
+            sendButton.disabled = true;
+            try {
+                setStatus('正在创建注册申请...');
+                const challenge = await postJson('/api/genregtoken', { username, lguid });
+                if (challenge.status !== 'Y') throw new Error(challenge.error || '无法创建注册申请');
+                token = challenge.token;
+                document.getElementById('reg-code').textContent = challenge.code;
+                const verifierLink = document.getElementById('verifier-chat-link');
+                verifierLink.href = `https://www.luogu.com.cn/chat?uid=${encodeURIComponent(challenge.recipientUid)}`;
+                verifierLink.textContent = `Luogu UID ${challenge.recipientUid}`;
+                document.getElementById('reg-challenge').hidden = false;
+                document.getElementById('username').disabled = true;
+                document.getElementById('lguid').disabled = true;
+                verifyButton.disabled = false;
+                setStatus('验证码已生成。请先发送私信，再开始校验。');
+            } catch (error) {
+                token = '';
+                setStatus(error.message || '注册申请失败，请稍后重试。', true);
+            } finally {
+                sendButton.disabled = false;
             }
         });
-        document.getElementById('register-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!token) { alert('请先发送验证代码'); return; }
-            const code = document.getElementById('code').value;
-            const resp = await fetch(`/api/verifycode?code=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`);
-            const data = await resp.json();
-            if (data.status === 'Y') {
-                alert('注册成功！请登录');
-                window.location.href = '/login';
-            } else {
-                alert('注册失败，请重试');
+
+        async function pollVerification() {
+            if (!token || pollInFlight) return;
+            pollInFlight = true;
+            try {
+                const result = await postJson('/api/verifycode', { token });
+                if (result.status === 'P') {
+                    setStatus(result.message || '等待服务器下一轮私信检查...');
+                } else if (result.status === 'V') {
+                    if (typeof argon2 === 'undefined')
+                        throw new Error('Argon2 组件不可用，请刷新页面后重试。');
+                    document.getElementById('password').disabled = true;
+                    setStatus('Luogu 账号已认证，正在设置密码并完成注册...');
+                    const derived = await argon2.hash({
+                        pass: document.getElementById('password').value,
+                        salt: saltOfUid(result.accountUid),
+                        time: 4,
+                        mem: 64 * 1024,
+                        parallelism: 4,
+                        hashLen: 32,
+                        type: argon2.ArgonType.Argon2id
+                    });
+                    const saved = await postJson('/api/setregpassword', {
+                        token,
+                        argonval: toBase64(derived.hash)
+                    });
+                    if (saved.status !== 'Y') {
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                        token = '';
+                        document.getElementById('password').disabled = false;
+                        setStatus(saved.error || '密码设置失败，请重新注册。', true);
+                        return;
+                    }
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                    token = '';
+                    setStatus('注册成功，正在跳转到登录页面...');
+                    window.location.href = '/login';
+                } else if (result.status === 'Y') {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                    token = '';
+                    setStatus('注册成功，正在跳转到登录页面...');
+                    window.location.href = '/login';
+                } else {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                    setStatus(result.error || '校验失败，请重新申请验证码。', true);
+                }
+            } catch (error) {
+                setStatus(`${error.message || '查询校验状态失败'}，将稍后重试。`, true);
+            } finally {
+                pollInFlight = false;
             }
+        }
+
+        verifyButton.addEventListener('click', () => {
+            if (!token || pollTimer) return;
+            verifyButton.disabled = true;
+            setStatus('已加入校验队列，等待服务器检查...');
+            pollVerification();
+            pollTimer = setInterval(pollVerification, 10_000);
         });
     </script>
 </body>

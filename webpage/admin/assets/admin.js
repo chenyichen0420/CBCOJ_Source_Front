@@ -167,6 +167,18 @@ function renderAdminUI() {
 		panesHtml += `
 			<div id="users-pane" class="tab-pane active">
 				<h2>用户权限管理</h2>
+				${currentUser && currentUser.role === 'superadmin' ? `
+					<section style="margin:16px 0;padding:16px;border:1px solid var(--border);border-radius:8px;">
+						<h3>注册私信验证账号</h3>
+						<p>修改会写入 middleware 的 basic_setting.ini 并立即生效。daemon 的 cookie.txt 第一行 UID 也必须同步。</p>
+						<p id="registration-verifier-status">正在读取当前配置...</p>
+						<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+							<label for="registration-verifier-uid">Luogu UID</label>
+							<input type="number" id="registration-verifier-uid" min="1" max="${(1 << 23) - 1}" step="1" />
+							<button type="button" class="btn-sm" id="registration-verifier-save">保存</button>
+						</div>
+					</section>
+				` : ''}
 				<div id="users-loading">加载用户列表...</div>
 				<div id="users-table-container" style="display:none;"></div>
 			</div>
@@ -243,6 +255,12 @@ function renderAdminUI() {
 			document.getElementById(btn.dataset.tab + '-pane').classList.add('active');
 		});
 	});
+
+	if (currentUser && currentUser.role === 'superadmin' &&
+		document.getElementById('registration-verifier-save')) {
+		document.getElementById('registration-verifier-save').addEventListener('click', saveRegistrationVerifier);
+		loadRegistrationVerifier();
+	}
 
 	// 加载各个模块的数据
 	if (currentUserPerms.can_manage_users) loadUsers();
@@ -367,6 +385,46 @@ const permissionFields = [
 	{ key: 'LOCK_USER_BANNED', label: '封禁用户', kind: 'ban' }
 ];
 const userApi = (id, action = '') => `${BASE_URL}/api/user/${id}${action ? `/${action}` : ''}`;
+
+async function loadRegistrationVerifier() {
+	const status = document.getElementById('registration-verifier-status');
+	try {
+		const resp = await fetch(`${BASE_URL}/api/registration-verifier?cookie=${getcookie()}`);
+		const data = await resp.json();
+		if (!resp.ok || data.status !== 'Y') throw new Error(data.error || '读取验证 UID 失败');
+		document.getElementById('registration-verifier-uid').value = data.uid || '';
+		status.textContent = data.uid ? `当前验证账号 UID：${data.uid}` : '尚未配置验证账号 UID，注册功能不可用';
+	} catch (err) {
+		status.textContent = `读取失败：${err.message}`;
+	}
+}
+
+async function saveRegistrationVerifier() {
+	const input = document.getElementById('registration-verifier-uid');
+	const uid = Number(input.value);
+	if (!Number.isInteger(uid) || uid < 1 || uid >= (1 << 23)) {
+		await modalAlert('请输入有效的 Luogu UID');
+		return;
+	}
+	const button = document.getElementById('registration-verifier-save');
+	button.disabled = true;
+	try {
+		const resp = await fetch(`${BASE_URL}/api/registration-verifier?cookie=${getcookie()}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ uid })
+		});
+		const data = await resp.json();
+		if (!resp.ok || data.status !== 'Y') throw new Error(data.error || '更新失败');
+		document.getElementById('registration-verifier-status').textContent =
+			`当前验证账号 UID：${data.uid}（已运行时生效）`;
+		await modalAlert('注册验证账号 UID 已写入 basic_setting.ini 并立即生效');
+	} catch (err) {
+		await modalAlert(`更新失败：${err.message}`);
+	} finally {
+		button.disabled = false;
+	}
+}
 
 async function loadUsers(page = 1) {
 	currentUserPage = page;

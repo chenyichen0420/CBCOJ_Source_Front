@@ -42,10 +42,11 @@ window.renderMarkdownWithMath = function(markdown) {
 
 document.addEventListener('DOMContentLoaded', () => {
     try {
-        const mdNodes = document.querySelectorAll('script[type="text/plain"].raw-markdown');
+        const mdNodes = document.querySelectorAll('script[type="text/plain"].raw-markdown, textarea.raw-markdown');
         mdNodes.forEach(node => {
             const container = document.createElement('div');
-            container.innerHTML = window.renderMarkdownWithMath(node.textContent || '');
+            const markdown = node instanceof HTMLTextAreaElement ? node.value : node.textContent;
+            container.innerHTML = window.renderMarkdownWithMath(markdown || '');
             node.parentNode.replaceChild(container, node);
 
             if (typeof renderMathInElement !== 'undefined') {

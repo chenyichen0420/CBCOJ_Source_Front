@@ -35,10 +35,10 @@
 				</select>
 				<label for="slogan">签名:</label>
 				<input type="text" id="slogan" name="slogan">
-				<label for="paswd">新密码 (留空则不修改):</label>
-				<input type="password" id="paswd" name="paswd">
-				<label for="old_paswd">若修改密码，请输入原密码以确认:</label>
-				<input type="password" id="old_paswd" name="old_paswd">
+				<label for="new-password">新密码 (留空则不修改):</label>
+				<input type="password" id="new-password" maxlength="100" autocomplete="new-password">
+				<label for="old-password">若修改密码，请输入原密码以确认:</label>
+				<input type="password" id="old-password" maxlength="100" autocomplete="current-password">
 				<button type="submit">保存修改</button>
 				<div id="info-msg" role="status" aria-live="polite" style="margin-top: 10px;"></div>
 			</form>
@@ -54,11 +54,14 @@
 			<div class="card" style="margin-top:16px; padding:12px;">
 				<h3>头像</h3>
 				<div style="display:flex;align-items:center;gap:12px;">
-					<img id="currentAvatar" src="/api/avatar/<%= user.username %>" class="avatar avatar-lg">
+					<img id="currentAvatar" src="/api/avatar/<%= encodeURIComponent(user.username) %>" data-avatar-username="<%= user.username %>" referrerpolicy="no-referrer" class="avatar avatar-lg" alt="头像">
 					<div>
-						<input type="file" id="avatarFile" accept="image/*"><br><br>
-						<button id="uploadAvatarBtn" class="btn">上传新头像</button>
+						<label for="avatar-url">图片 URL (最多 512 个字符)</label>
+						<input type="url" id="avatar-url" maxlength="512" placeholder="https://example.com/avatar.png" autocomplete="url">
+						<button id="previewAvatarBtn" class="btn" type="button">预览</button>
+						<button id="saveAvatarBtn" class="btn btn-primary" type="button">保存头像 URL</button>
 						<div id="avatar-msg" role="status" aria-live="polite" style="margin-top:8px"></div>
+						<p class="text-secondary">仅允许 HTTP(S) 图片地址；外链图片在浏览器异步加载，最多等待 2 秒。留空可恢复 SVG 首字母头像。</p>
 					</div>
 				</div>
 			</div>
@@ -66,13 +69,57 @@
 	</main>
 
 	<script type="text/javascript" src="/assets/checklogin.min.js"></script>
+	<script src="/assets/argon2-bundled.min.js"></script>
+	<script src="/assets/avatar.js"></script>
 	<script>
+		const MAX_AVATAR_URL_LENGTH = 512;
+		let currentUserId = null;
+
+		function splitmix64(value) {
+			const mask = 0xffffffffffffffffn;
+			value = (value + 0x9e3779b97f4a7c15n) & mask;
+			value = ((value ^ (value >> 30n)) * 0xbf58476d1ce4e5b9n) & mask;
+			value = ((value ^ (value >> 27n)) * 0x94d049bb133111ebn) & mask;
+			return (value ^ (value >> 31n)) & mask;
+		}
+
+		async function hashPassword(password, uid) {
+			if (typeof argon2 === 'undefined' || !window.crypto?.subtle)
+				throw new Error('密码学组件不可用，请使用 HTTPS 并刷新页面后重试');
+			let value = BigInt(uid) + 1n;
+			for (let i = 0; i < 10; i++) value = splitmix64(value);
+			const uidBytes = new Uint8Array(8);
+			for (let i = 0; i < uidBytes.length; i++) {
+				uidBytes[i] = Number(value & 0xffn);
+				value >>= 8n;
+			}
+			const salt = new Uint8Array(await crypto.subtle.digest('SHA-512', uidBytes));
+			const derived = await argon2.hash({
+				pass: password,
+				salt,
+				time: 4,
+				mem: 64 * 1024,
+				parallelism: 4,
+				hashLen: 32,
+				type: argon2.ArgonType.Argon2id
+			});
+			let binary = '';
+			for (const byte of derived.hash) binary += String.fromCharCode(byte);
+			return btoa(binary);
+		}
+
+		function setMessage(element, message, error = false) {
+			element.textContent = message;
+			element.style.color = error ? 'red' : 'green';
+		}
+
 		// 加载用户当前信息
 		(async () => {
 			const cookie = getcookie();
-			const resp = await fetch(`/api/getinfoshort?key=${cookie}`);
+			const resp = await fetch(`/api/getinfoshort?key=${encodeURIComponent(cookie)}`);
 			const data = await resp.json();
 			if (data.status === 'Y') {
+				currentUserId = data.uid;
 				document.getElementById('usrname').value = data.username;
 				document.getElementById('pubcode').value = data.pubcode || '';
 				document.getElementById('slogan').value = data.slogan || '';
@@ -84,6 +131,14 @@
 						document.getElementById('profile_markdown').value = pjson.markdown || '';
 					}
 				} catch (e) { }
+				try {
+					const avatarResp = await fetch(`/api/avatar-url/${encodeURIComponent(data.username)}`);
+					const avatarData = await avatarResp.json();
+					if (avatarData.status === 'Y' && typeof avatarData.avatar_url === 'string')
+						document.getElementById('avatar-url').value = avatarData.avatar_url;
+				} catch (e) {
+					console.error('头像 URL 加载失败:', e);
+				}
 			}
 		})();
 		document.getElementById('info-form').addEventListener('submit', async (e) => {
@@ -91,23 +146,36 @@
 			const usrname = document.getElementById('usrname').value;
 			const pubcode = document.getElementById('pubcode').value;
 			const slogan = document.getElementById('slogan').value;
-			const paswd = document.getElementById('paswd').value;
-			const old_paswd = document.getElementById('old_paswd').value;
+			const newPassword = document.getElementById('new-password').value;
+			const oldPassword = document.getElementById('old-password').value;
 			const cookie = getcookie();
-			const resp = await fetch('/api/updinfoshort', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ cookie, usrname, paswd, old_paswd, publiccode: pubcode, slogan })
-			});
-			const data = await resp.json();
 			const infoMsg = document.getElementById('info-msg');
-			if (data.status === 'Y') {
-				infoMsg.textContent = '修改成功！页面将刷新...';
-				infoMsg.style.color = 'green';
+			if (newPassword && !oldPassword) {
+				setMessage(infoMsg, '修改密码时必须填写原密码', true);
+				return;
+			}
+			try {
+				const payload = { cookie, usrname, publiccode: pubcode, slogan };
+				if (newPassword) {
+					if (newPassword.length > 100 || oldPassword.length > 100)
+						throw new Error('密码长度不能超过 100 个字符');
+					if (currentUserId === null) throw new Error('无法获取当前用户编号，请刷新页面重试');
+					payload.old_argonval = await hashPassword(oldPassword, currentUserId);
+					payload.new_argonval = await hashPassword(newPassword, currentUserId);
+				}
+				const resp = await fetch('/api/updinfoshort', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+				const data = await resp.json();
+				if (data.status !== 'Y') throw new Error(data.error || '未知错误');
+				setMessage(infoMsg, '修改成功！页面将刷新...');
+				document.getElementById('new-password').value = '';
+				document.getElementById('old-password').value = '';
 				setTimeout(() => location.reload(), 1000);
-			} else {
-				infoMsg.textContent = '修改失败: ' + data.error;
-				infoMsg.style.color = 'red';
+			} catch (error) {
+				setMessage(infoMsg, '修改失败: ' + (error.message || error), true);
 			}
 		});
 		// 保存个人主页
@@ -119,22 +187,56 @@
 			const profileMsg = document.getElementById('profile-msg');
 			if (j.status === 'Y') { profileMsg.textContent = '保存成功'; profileMsg.style.color = 'green'; } else { profileMsg.textContent = '保存失败: ' + (j.error||''); profileMsg.style.color='red'; }
 		});
-		// 头像上传
-		document.getElementById('uploadAvatarBtn').addEventListener('click', async (e) => {
-			e.preventDefault();
-			const f = document.getElementById('avatarFile').files[0];
-			const avatarMsg = document.getElementById('avatar-msg');
-			if (!f) { avatarMsg.textContent = '请选择图片'; avatarMsg.style.color='red'; return; }
-			const fd = new FormData(); fd.append('avatar', f);
+		const avatarInput = document.getElementById('avatar-url');
+		const avatarImage = document.getElementById('currentAvatar');
+		const avatarMsg = document.getElementById('avatar-msg');
+		document.getElementById('previewAvatarBtn').addEventListener('click', async () => {
+			const avatarUrl = avatarInput.value.trim();
+			if (!avatarUrl) {
+				avatarImage.src = `/api/avatar/${encodeURIComponent('<%= user.username %>')}`;
+				setMessage(avatarMsg, '已预览 SVG 首字母头像');
+				return;
+			}
+			const error = window.validateAvatarImageUrl(avatarUrl, MAX_AVATAR_URL_LENGTH);
+			if (error) {
+				setMessage(avatarMsg, error, true);
+				return;
+			}
+			setMessage(avatarMsg, '正在加载预览...');
+			const loaded = await window.loadAvatarImage(avatarImage, avatarUrl, 2000);
+			setMessage(avatarMsg, loaded ? '图片加载成功' : '图片加载失败或超过 2 秒，当前显示首字母头像', !loaded);
+		});
+		document.getElementById('saveAvatarBtn').addEventListener('click', async () => {
+			const avatarUrl = avatarInput.value.trim();
+			const avatarError = avatarUrl ? window.validateAvatarImageUrl(avatarUrl, MAX_AVATAR_URL_LENGTH) : null;
+			if (avatarError) {
+				setMessage(avatarMsg, avatarError, true);
+				return;
+			}
+			if (avatarUrl) {
+				setMessage(avatarMsg, '正在检查图片并保存...');
+				const loaded = await window.loadAvatarImage(avatarImage, avatarUrl, 2000);
+				if (!loaded) {
+					setMessage(avatarMsg, '图片无法在 2 秒内加载，未保存', true);
+					return;
+				}
+			}
+			const saveButton = document.getElementById('saveAvatarBtn');
 			try {
-				const resp = await fetch('/api/upload-avatar', { method: 'POST', body: fd });
+				saveButton.disabled = true;
+				const resp = await fetch('/api/avatar-url', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ avatar_url: avatarUrl })
+				});
 				const data = await resp.json();
-				if (data.status === 'Y') {
-					avatarMsg.textContent = '上传成功'; avatarMsg.style.color='green';
-					document.getElementById('currentAvatar').src = data.url + '?t=' + Date.now();
-				} else { avatarMsg.textContent = '上传失败: ' + (data.error||''); avatarMsg.style.color='red'; }
-			} catch (err) {
-				avatarMsg.textContent = '上传出错'; avatarMsg.style.color='red';
+				if (data.status !== 'Y') throw new Error(data.error || '保存失败');
+				avatarImage.src = avatarUrl || `/api/avatar/${encodeURIComponent('<%= user.username %>')}`;
+				setMessage(avatarMsg, '头像 URL 已保存');
+			} catch (error) {
+				setMessage(avatarMsg, '保存失败: ' + (error.message || error), true);
+			} finally {
+				saveButton.disabled = false;
 			}
 		});
 	</script>

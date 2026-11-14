@@ -4,16 +4,13 @@ const router = express.Router();
 const { packParams, parsePack } = require('../db');
 const pool = require('../db');
 const crypto = require('crypto');
-const { getUserByCookie, requireLogin, getUserPermissions, requirePermission, currentNonce, verifyNonce, tryAcquireNonceSlot, SLOT_SECONDS, ALLOWED_PAST_SLOTS } = require('../auth');
+const { getUserByCookie, requireLogin, getUserPermissions, currentNonce, verifyNonce, tryAcquireNonceSlot, SLOT_SECONDS, ALLOWED_PAST_SLOTS } = require('../auth');
 const logger = require('../logger');
 const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
-const util = require('util');
-const { validateInt, validateString, validateBoolean, contentLengthGuard } = require('../validation');
+const { validateInt, validateString, contentLengthGuard } = require('../validation');
 
 const MAX_FORM_BODY_BYTES = 128 * 1024;
-const MAX_FILE_UPLOAD_BYTES = 16 * 1024 * 1024;
+const MAX_AVATAR_URL_LENGTH = 512;
 const upload = multer({
 	limits: {
 		fieldSize: MAX_FORM_BODY_BYTES,
@@ -22,15 +19,22 @@ const upload = multer({
 		parts: 17
 	}
 });
-const uploadAvatar = multer({
-	limits: {
-		fileSize: MAX_FILE_UPLOAD_BYTES,
-		files: 1,
-		fieldSize: 16 * 1024,
-		fields: 0,
-		parts: 2
+
+function validateAvatarUrl(value) {
+	const valueErr = validateString(value, { minLen: 1, maxLen: MAX_AVATAR_URL_LENGTH });
+	if (valueErr) return valueErr;
+	if (/[\u0000-\u0020\u007f]/.test(value)) return '头像 URL 不能包含空白或控制字符';
+	try {
+		const url = new URL(value);
+		if (!['https:', 'http:'].includes(url.protocol) || !url.hostname ||
+			url.username || url.password || url.href.length > MAX_AVATAR_URL_LENGTH) {
+			return '头像 URL 必须是有效的 HTTP(S) 图片地址';
+		}
+	} catch (_) {
+		return '头像 URL 必须是有效的 HTTP(S) 图片地址';
 	}
-});
+	return null;
+}
 
 // 获取当前用户的所有权限
 router.get('/mypermissions', requireLogin, async (req, res) => {
@@ -172,7 +176,7 @@ router.get('/getinfoshort', async (req, res) => {
 
 // 更新个人信息
 router.post('/updinfoshort', requireLogin, contentLengthGuard(MAX_FORM_BODY_BYTES), upload.none(), async (req, res) => {
-	const { usrname, paswd, old_paswd, publiccode, slogan } = req.body;
+	const { usrname, old_argonval, new_argonval, publiccode, slogan } = req.body;
 	const user = req.user;
 	const ip = logger.getClientIp(req);
 	const unErr = validateString(usrname, { minLen: 1, maxLen: 100 });
@@ -185,21 +189,28 @@ router.post('/updinfoshort', requireLogin, contentLengthGuard(MAX_FORM_BODY_BYTE
 		const slErr = validateString(slogan, { minLen: 0, maxLen: 200 });
 		if (slErr) return res.json({ status: 'N', error: `slogan: ${slErr}` });
 	}
-	if (paswd) {
-		if (paswd.length > 100)
-			return res.json({ status: 'N', error: 'Invalid password' });
-		if (!old_paswd)
-			return res.json({ status: 'N', error: 'Invalid password' });
+	let oldPasswordHash;
+	let newPasswordHash;
+	if (old_argonval !== undefined || new_argonval !== undefined) {
+		const decodeArgonHash = value => {
+			if (typeof value !== 'string' || value.length !== 44) return null;
+			const decoded = Buffer.from(value, 'base64');
+			return decoded.length === 32 && decoded.toString('base64') === value ? decoded : null;
+		};
+		const oldArgonHash = decodeArgonHash(old_argonval);
+		const newArgonHash = decodeArgonHash(new_argonval);
+		if (!oldArgonHash || !newArgonHash)
+			return res.status(400).json({ status: 'N', error: '密码校验数据无效，请刷新页面后重试' });
+		oldPasswordHash = crypto.createHash('sha256').update(oldArgonHash).digest();
+		newPasswordHash = crypto.createHash('sha256').update(newArgonHash).digest();
 	}
-	if (old_paswd && old_paswd.length > 100)
-		return res.json({ status: 'N', error: 'Invalid password' });
 
 	let cookie = req.userCookie;
 	const usernameChanged = usrname !== user.username;
 	const args = [cookie];
 	if (usernameChanged) args.push('username', usrname);
 	if (publiccode !== undefined && publiccode !== null) args.push('pubcode', publiccode);
-	if (paswd) args.push('password', old_paswd, paswd);
+	if (oldPasswordHash && newPasswordHash) args.push('password', oldPasswordHash, newPasswordHash);
 	if (slogan !== undefined && slogan !== null) args.push('slogan', slogan);
 	if (args.length === 1) return res.json({ status: 'Y' });
 
@@ -334,24 +345,36 @@ router.post('/verifycode', async (req, res) => {
 
 // 导出在文件末尾（在附加路由之后）
 
-// 头像上传
-router.post('/upload-avatar', requireLogin, contentLengthGuard(MAX_FILE_UPLOAD_BYTES), uploadAvatar.single('avatar'), async (req, res) => {
-	return res.json({ status: 'N', error: '保存失败' });
-	//暂时不支持自定义头像
-	try {
-		if (!req.file) return res.json({ status: 'N', error: 'Missing file' });
-		const username = req.user.username;
-		const ext = (req.file.mimetype || '').split('/').pop() || 'png';
-		const avatarDir = path.join(__dirname, '..', 'webpage', 'assets', 'avatars');
-		await fs.promises.mkdir(avatarDir, { recursive: true });
-		const filename = `${username}.${ext}`;
-		const filepath = path.join(avatarDir, filename);
-		await fs.promises.writeFile(filepath, req.file.buffer);
-		return res.json({ status: 'Y', url: `/assets/avatars/${encodeURIComponent(filename)}` });
-	} catch (err) {
-		console.error('avatar upload error', err);
-		return res.json({ status: 'N', error: '保存失败' });
+// 文件上传头像已永久禁用；头像仅允许使用安全校验后的外链 URL 或首字母 SVG。
+router.post('/upload-avatar', requireLogin, (req, res) =>
+	res.status(410).json({ status: 'N', error: '头像文件上传已禁用，请改为设置 HTTP(S) 图片 URL' }));
+
+/*
+ * Avatar URL middleware contract (not implemented in the current middleware):
+ * GET /api/avatar-url/:username
+ *   middleware input: U command, ['username', username, 'avatar_url']
+ *   web response: { status: 'Y', avatar_url: string | null }
+ * POST /api/avatar-url
+ *   web request: { avatar_url: string } (empty string clears the custom avatar)
+ *   middleware input: C command, [cookie, 'avatar_url', avatar_url]
+ *   middleware response: Y on persistence, otherwise N + an error string
+ * URLs must be <= 512 characters and validated as HTTP(S) without credentials.
+ */
+router.get('/avatar-url/:username', requireLogin, (req, res) => {
+	const usernameErr = validateString(req.params.username, { minLen: 1, maxLen: 100 });
+	if (usernameErr) return res.status(400).json({ status: 'N', error: `username: ${usernameErr}` });
+	return res.status(501).json({ status: 'N', error: '头像 URL 查询尚未接入中间件' });
+});
+
+router.post('/avatar-url', requireLogin, (req, res) => {
+	const { avatar_url: avatarUrl } = req.body || {};
+	if (typeof avatarUrl !== 'string')
+		return res.status(400).json({ status: 'N', error: 'avatar_url 必须为字符串' });
+	if (avatarUrl !== '') {
+		const urlErr = validateAvatarUrl(avatarUrl);
+		if (urlErr) return res.status(400).json({ status: 'N', error: urlErr });
 	}
+	return res.status(501).json({ status: 'N', error: '头像 URL 保存尚未接入中间件' });
 });
 
 /**
@@ -415,48 +438,23 @@ function generateBlueBackgroundCharSVG(char, options = {}) {
 </svg>`;
 }
 
-// 返回头像（如果有则直接返回静态文件，否则返回动态 SVG）
+// 无自定义头像时始终返回动态首字母 SVG；外链头像由浏览器端安全加载。
 router.get('/avatar/:username', async (req, res) => {
-	// 返回动态 SVG
 	const username = req.params.username;
 	const initial = (username && username[0]) ? username[0].toUpperCase() : '?';
 	const svg = generateBlueBackgroundCharSVG(initial, { width: 80, height: 80 });
 	res.setHeader('Content-Type', 'image/svg+xml');
+	res.setHeader('X-Content-Type-Options', 'nosniff');
 	res.send(svg);
-	return;
-	//暂时不支持自定义头像
-	const unErr = validateString(username, { minLen: 1, maxLen: 100 });
-	if (unErr) return res.status(400).json({ status: 'N', error: `username: ${unErr}` });
-	const avatarDir = path.join(__dirname, '..', 'webpage', 'assets', 'avatars');
-	const tryExt = ['png','jpg','jpeg','webp','gif'];
-	for (const e of tryExt) {
-		const p = path.join(avatarDir, `${username}.${e}`);
-		if (fs.existsSync(p)) return res.sendFile(p);
-	}
 });
 
 module.exports = router;
 
 /*
-## 标注汇总
-
-以下是在 `user.js` 中标注的数据库通信接口：
-
-| 路由 | 方法 | 标注位置 | 说明 |
-|------|------|---------|------|
-| `/login` | GET | 替换原 `pool.query` | 用户名密码验证 → 返回 cookie |
-| `/verifycookie` | GET | 替换原 `pool.query` | Cookie 有效性验证 |
-| `/getinfoshort` | GET | 替换原 `pool.query` | 多方式用户信息查询 |
-| `/updinfoshort` | POST | 替换原 `pool.query` | 更新用户个人信息 |
-| `/genregtoken` | POST | 对接中间件 `P` | 创建注册挑战与私信验证码 |
-| `/setregpassword` | POST | 对接中间件 `W` | 认证后一次性设置密码并完成注册 |
-| `/verifycode` | POST | 对接中间件 `V` | 申请批量校验并查询认证状态 |
-| `/problem/new` | POST | 替换原 `pool.query` | 创建新题目 |
-| `/problem/:id/upload-data` | POST | 替换原 `pool.query` | 上传题目数据包 |
-| `/problem/:id/upload-checker` | POST | 属于题目数据包，已经删除 | 上传并编译检查器 |
-| `/problem/edit` | POST | 替换原 `pool.query` | 编辑题目 |
-
-**未标注的接口**（逻辑需要大改）：
-- `/upload-avatar` — 纯文件操作
-- `/avatar/:username` — 纯文件操作
+Other account routes already talk to the account middleware:
+`/login`, `/verifycookie`, `/getinfoshort`, `/updinfoshort`,
+`/genregtoken`, `/setregpassword`, and `/verifycode`.
+`/avatar/:username` only emits the escaped first-letter SVG.
+`/avatar-url/:username` and POST `/avatar-url` are intentionally 501 until the
+middleware adds the `avatar_url` field described in the contract above.
 */

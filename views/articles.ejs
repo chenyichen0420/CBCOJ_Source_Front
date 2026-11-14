@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>文章广场 - CBCOJ</title>
+	<link rel="stylesheet" href="/assets/base.css">
+	<link rel="stylesheet" href="/assets/components.css">
+	<link rel="stylesheet" href="/assets/layout.css">
+	<style>
+		.article-list { display: grid; gap: 14px; margin-top: 20px; }
+		.article-item { padding: 18px 20px; }
+		.article-item h2 { margin-bottom: 8px; }
+		.article-item p { color: var(--text-secondary); margin: 4px 0; overflow-wrap: anywhere; }
+		.article-item-meta { color: var(--text-muted) !important; font-size: .88rem; }
+		.article-list-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+	</style>
+</head>
+<body>
+	<nav>
+		<div class="nav-left"><%- navigation %></div>
+		<div class="nav-right">
+			<div class="login-content">
+				<div id="login-area"></div>
+				<div id="login-status">
+					<div class="status-indicator" id="statusIndicator"></div>
+					<span id="statusText">正在检测登录状态...</span>
+				</div>
+			</div>
+		</div>
+	</nav>
+	<main class="page">
+		<div class="container">
+			<div class="article-list-actions">
+				<div>
+					<h1>文章广场</h1>
+					<p class="text-secondary">这里仅展示公开的“其他”类文章；题解请从题目页面查看。</p>
+				</div>
+				<% if (canManageArticles) { %>
+					<a href="/article/new" class="btn btn-primary">新建文章</a>
+				<% } %>
+			</div>
+			<p id="article-list-status" class="text-secondary" role="status">正在加载文章…</p>
+			<div id="article-list" class="article-list"></div>
+			<div id="article-pagination" class="pagination"></div>
+			<div id="article-page-data" hidden
+				data-articles="<%= JSON.stringify(articles) %>"
+				data-total-pages="<%= totalPages %>"
+				data-error="<%= articleListError %>"></div>
+		</div>
+	</main>
+	<script src="/assets/checklogin.min.js"></script>
+	<script>
+		const articleList = document.getElementById('article-list');
+		const statusNode = document.getElementById('article-list-status');
+		const paginationNode = document.getElementById('article-pagination');
+		const pageData = document.getElementById('article-page-data');
+		const currentPage = Number(new URLSearchParams(location.search).get('page') || 1);
+
+		function renderArticle(article) {
+			const item = document.createElement('article');
+			item.className = 'card article-item';
+			const heading = document.createElement('h2');
+			const title = document.createElement('a');
+			title.href = `/article/${encodeURIComponent(article.id)}`;
+			title.textContent = article.title;
+			heading.appendChild(title);
+			item.appendChild(heading);
+			if (article.summary) {
+				const summary = document.createElement('p');
+				summary.textContent = article.summary;
+				item.appendChild(summary);
+			}
+			const meta = document.createElement('p');
+			meta.className = 'article-item-meta';
+			const author = article.author && article.author.username ? article.author.username : '未知';
+			meta.textContent = `${author} · ${article.updated_at ? new Date(article.updated_at).toLocaleString('zh-CN') : '日期未知'}`;
+			item.appendChild(meta);
+			articleList.appendChild(item);
+		}
+
+		function renderPagination(page, totalPages) {
+			paginationNode.replaceChildren();
+			if (!Number.isInteger(totalPages) || totalPages < 2) return;
+			for (let value = 1; value <= totalPages; value++) {
+				const link = document.createElement('a');
+				link.href = `/articles?page=${value}`;
+				link.textContent = String(value);
+				if (value === page) {
+					link.setAttribute('aria-current', 'page');
+					link.style.background = 'rgba(78,161,255,.24)';
+				}
+				paginationNode.appendChild(link);
+			}
+		}
+
+		function loadArticles() {
+			if (!Number.isSafeInteger(currentPage) || currentPage < 1) {
+				statusNode.textContent = '页码无效';
+				return;
+			}
+			try {
+				const articles = JSON.parse(pageData.dataset.articles)
+					.filter(article => article.type === 'other' && article.is_public);
+				articles.forEach(renderArticle);
+				statusNode.textContent = pageData.dataset.error || (articles.length ? '' : '暂无公开文章');
+				renderPagination(currentPage, Number(pageData.dataset.totalPages) || 1);
+			} catch (error) {
+				statusNode.textContent = error.message || '文章列表加载失败';
+			}
+		}
+
+		loadArticles();
+	</script>
+</body>
+</html>

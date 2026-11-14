@@ -60,12 +60,15 @@
 | `/setregpassword` | POST | 验证后一次性设置密码并完成注册 | 对接中间件 | Account Service `W` |
 | `/registration-verifier` | GET/POST | superadmin 查看或修改注册私信验证 UID | 对接中间件 | Account Service `X`（写入 `basic_setting.ini` 并即时更新） |
 
-注册私信验证账号 UID 从 middleware 工作目录的 `basic_setting.ini` 读取，位于现有数据库路径及四个端口配置之后；superadmin 可通过管理界面更新。Account `P` 将其返回给前端，UpdateSession `B`/`G` 要求 daemon 提交相同 UID，否则拒绝读取任务或提交验证结果。
 | `/mypermissions` | GET | SQL 查询 `user_permissions` | 对接中间件 | `accmng` 解析 `flag` 字段 |
 | `/getinfoshort` | GET | SQL 查询 `users` | 对接中间件 | `accmng.get_safe` + `ache` |
-| `/updinfoshort` | POST | SQL UPDATE `users` | 对接中间件 | Account Service `S` / `1` / `2` |
-| `/upload-avatar` | POST | 文件写入 | **保留独立** | 与中间件无关 |
-| `/avatar/:username` | GET | 静态文件 / SVG | **保留独立** | 与中间件无关 |
+| `/updinfoshort` | POST | 个人信息与密码更新 | 对接中间件 | Account Service `C` |
+| `/upload-avatar` | POST | 已禁用上传并返回 410 | **不再支持** | 使用外链 URL 或 SVG 首字母头像 |
+| `/avatar/:username` | GET | 动态 SVG 首字母头像 | **保留独立** | 外链头像 URL 由下方待接接口查询 |
+| `/avatar-url/:username` | GET | 暂未接入中间件，返回 501 | **待接入** | `U` 读取 `avatar_url` |
+| `/avatar-url` | POST | 暂未接入中间件，返回 501 | **待接入** | `C` 使用 Cookie 更新 `avatar_url` |
+
+注册私信验证账号 UID 从 middleware 工作目录的 `basic_setting.ini` 读取，位于现有数据库路径及四个端口配置之后；superadmin 可通过管理界面更新。Account `P` 将其返回给前端，UpdateSession `B`/`G` 要求 daemon 提交相同 UID，否则拒绝读取任务或提交验证结果。
 
 **需要移除的代码**：
 - `users` 表相关 SQL（`SELECT ... WHERE username=? AND password=?`）
@@ -74,7 +77,7 @@
 - 本地密码哈希逻辑
 
 **需要保留的代码**：
-- 头像上传/获取逻辑（文件系统）
+- 首字母 SVG 头像生成与 HTTP(S) 外链图片展示
 - Cookie 的 HTTP 传输逻辑（`res.cookie` / `req.cookies`）
 
 **适配层需要实现**：
@@ -517,8 +520,58 @@ adapter/
 | 上传数据 | ZIP 解压成功，数据路径正确 |
 | 比赛列表 | 显示已开始的比赛 |
 | 比赛提交 | 成功提交，排名更新 |
+| 文章 | 页面已实现；文章 API 暂待 middleware 数据接口 |
+| 头像 | 文件上传禁用；外链 URL 读写暂待 middleware 字段 |
 
 ---
+
+## 十二、本轮网页功能的待接入 middleware 接口
+
+以下网页与前端请求已实现，数据读写暂未接入 middleware，相关 API 当前返回 HTTP 501。
+
+### 文章
+
+- `GET /api/articles?page=1&page_size=20`：返回
+  `{ status: "Y", articles: ArticleSummary[], page, total, total_pages }`。
+  仅列出公开的 `type: "other"` 文章，供文章广场展示。此接口直接返回文章元数据，
+  仅拥有 `can_manage_articles` 权限的用户可访问（与题目管理 API 的
+  `can_manage_problems` 权限规则一致）。
+- `GET /api/articles/:id`：返回
+  `{ status: "Y", article: Article }`。`Article` 字段包括 `id`、`title`、
+  `type`（`solution` 或 `other`）、`is_public`、可空的 `problem_id`/
+  `problem_title`、`author: { id, username }`、`updated_at` 和 Markdown
+  `content`。这是文章管理 JSON API，仅拥有 `can_manage_articles` 权限的用户可访问；
+  网页展示公开文章应由服务端网页路由读取并渲染。
+- `POST /api/articles` 与 `PUT /api/articles/:id`：JSON 请求字段为
+  `{ title, type, is_public, problem_id, content }`。题解必须提供正整数
+  `problem_id`，其他文章的 `problem_id` 必须为 `null`。创建返回
+  `{ status: "Y", id }`，更新返回 `{ status: "Y", article }`。
+- `GET /api/problems/:id/solutions`：返回
+  `{ status: "Y", solutions: ArticleSummary[] }`，用于题目页右栏折叠题解列表。
+  仅拥有 `can_manage_articles` 权限的用户可访问。
+
+middleware 需验证关联题目、文章公开状态、作者及文章管理权限；`ArticleSummary`
+至少返回 `id`、`title`、`type`、`is_public`、`author` 和 `updated_at`，可附带
+`summary`。文章正文为 UTF-8 Markdown，存储层可按需使用 Base64。
+
+所有新增文章 JSON API（`/api/articles` 及其子路由、`/api/problems/:id/solutions`，含
+读取、创建和更新）均使用 `requirePermission('can_manage_articles')`；未登录返回 401，
+无此权限返回 403，与题目管理 API 使用 `can_manage_problems` 的规则一致。文章广场、
+文章展示和题目网页路由仍对普通登录用户开放；网页不能依赖浏览器调用受限的管理 JSON
+API 获取公开内容，接入 middleware 时应由网页路由服务端读取数据并渲染页面。当前文章
+middleware 适配尚未实现，相关 JSON API 返回 501。
+
+### 外链头像
+
+- `GET /api/avatar-url/:username`：查询 `avatar_url`，成功返回
+  `{ status: "Y", avatar_url: string | null }`。对应 Account `U` 请求字段
+  `username`，查询字段 `avatar_url`。
+- `POST /api/avatar-url`：请求 JSON `{ avatar_url: string }`；空字符串表示清除
+  自定义头像。使用当前 Cookie 通过 Account `C` 更新 `avatar_url`，成功返回
+  `{ status: "Y" }`。
+
+网页层已限制 URL 最长 512 个字符、只允许 HTTP(S) 且拒绝凭据；图片在浏览器异步加载，
+总等待不超过 2 秒，失败时回退 SVG 首字母头像。头像上传接口固定返回 410。
 
 *文档版本: 1.0*
 *最后更新: 2026.09.04*

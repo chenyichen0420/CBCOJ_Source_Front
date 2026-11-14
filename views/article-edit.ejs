@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title><%= title %> - CBCOJ</title>
+	<link rel="stylesheet" href="/assets/base.css">
+	<link rel="stylesheet" href="/assets/components.css">
+	<link rel="stylesheet" href="/assets/layout.css">
+	<script src="/assets/marked.min.js"></script>
+	<script src="/assets/purify.min.js"></script>
+	<script src="/assets/katex.min.js"></script>
+	<script src="/assets/auto-render.min.js"></script>
+	<style>
+		.article-editor { max-width: 1200px; }
+		.article-form { max-width: none; }
+		.article-form-section { margin: 18px 0; }
+		.article-form-section > label { display: block; margin-bottom: 6px; }
+		.article-body-input { min-height: 420px; resize: vertical; font-family: ui-monospace, monospace; }
+		.article-preview { display: none; margin-top: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); overflow-wrap: anywhere; }
+		.article-preview.active { display: block; }
+		.article-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+		.article-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+		.article-error { color: #ff8d83; }
+		@media (max-width: 700px) { .article-options { grid-template-columns: 1fr; gap: 0; } }
+	</style>
+</head>
+<body>
+	<nav>
+		<div class="nav-left"><%- navigation %></div>
+		<div class="nav-right">
+			<div class="login-content">
+				<div id="login-area"></div>
+				<div id="login-status">
+					<div class="status-indicator" id="statusIndicator"></div>
+					<span id="statusText">正在检测登录状态...</span>
+				</div>
+			</div>
+		</div>
+	</nav>
+	<main class="page">
+		<div class="container article-editor">
+			<h1><%= title %></h1>
+			<p class="text-secondary">文章内容使用 Markdown 与 LaTeX。题解会出现在对应题目的右侧折叠列表中。</p>
+			<form id="article-form" class="article-form" data-article-id="<%= articleId === null ? '' : articleId %>">
+				<div class="article-form-section">
+					<label for="article-title-input">标题</label>
+					<input id="article-title-input" name="title" maxlength="200" required>
+				</div>
+				<div class="article-options">
+					<div class="article-form-section">
+						<label for="article-type">文章类别</label>
+						<select id="article-type" name="type">
+							<option value="other">其他</option>
+							<option value="solution">题解</option>
+						</select>
+					</div>
+					<div class="article-form-section">
+						<label for="article-public">公开状态</label>
+						<select id="article-public" name="is_public">
+							<option value="true">公开 (登录用户可见)</option>
+							<option value="false">不公开 (仅作者及文章管理员可见)</option>
+						</select>
+					</div>
+				</div>
+				<div id="problem-id-section" class="article-form-section" hidden>
+					<label for="problem-id">关联题目编号</label>
+					<input id="problem-id" name="problem_id" type="number" min="1" step="1" inputmode="numeric">
+					<p class="text-secondary">题目标题由服务端按编号查询并随文章信息返回。</p>
+				</div>
+				<div class="article-form-section">
+					<label for="article-content">正文</label>
+					<textarea id="article-content" name="content" class="article-body-input" maxlength="100000" required placeholder="# 标题&#10;&#10;开始编写文章内容…"></textarea>
+					<div id="article-preview" class="article-preview" aria-live="polite"></div>
+				</div>
+				<div class="article-actions">
+					<button type="button" class="btn" id="preview-article">预览</button>
+					<button type="submit" class="btn btn-primary" id="save-article"><%= articleId ? '保存修改' : '创建文章' %></button>
+					<a class="btn" href="<%= articleId ? `/article/${articleId}` : '/articles' %>">取消</a>
+				</div>
+				<p id="article-form-status" role="status" aria-live="polite"></p>
+			</form>
+		</div>
+	</main>
+	<script src="/assets/checklogin.min.js"></script>
+	<script src="/assets/markdown-renderer.js"></script>
+	<script>
+		const form = document.getElementById('article-form');
+		const articleIdValue = form.dataset.articleId;
+		const articleId = articleIdValue === '' ? null : Number(articleIdValue);
+		const typeField = document.getElementById('article-type');
+		const problemSection = document.getElementById('problem-id-section');
+		const contentField = document.getElementById('article-content');
+		const preview = document.getElementById('article-preview');
+		const statusNode = document.getElementById('article-form-status');
+		const saveButton = document.getElementById('save-article');
+		let existingArticleLoaded = articleId === null;
+
+		function syncProblemField() {
+			const isSolution = typeField.value === 'solution';
+			problemSection.hidden = !isSolution;
+			document.getElementById('problem-id').required = isSolution;
+		}
+
+		function renderPreview() {
+			preview.innerHTML = renderMarkdownWithMath(contentField.value || '');
+			if (typeof renderMathInElement !== 'undefined') {
+				renderMathInElement(preview, {
+					delimiters: [
+						{ left: '$$', right: '$$', display: true },
+						{ left: '$', right: '$', display: false },
+						{ left: '\\(', right: '\\)', display: false },
+						{ left: '\\[', right: '\\]', display: true }
+					],
+					throwOnError: false
+				});
+			}
+			preview.classList.add('active');
+		}
+
+		async function loadArticleForEdit() {
+			try {
+				const response = await fetch(`/api/articles/${encodeURIComponent(articleId)}`);
+				const result = await response.json();
+				if (!response.ok || result.status !== 'Y' || !result.article)
+					throw new Error(result.error || '文章读取失败');
+				const article = result.article;
+				form.elements.title.value = article.title || '';
+				typeField.value = article.type;
+				form.elements.is_public.value = String(Boolean(article.is_public));
+				form.elements.problem_id.value = article.problem_id || '';
+				contentField.value = article.content || '';
+				syncProblemField();
+				existingArticleLoaded = true;
+				saveButton.disabled = false;
+				statusNode.textContent = '';
+			} catch (error) {
+				statusNode.className = 'article-error';
+				statusNode.textContent = `${error.message || error}。编辑数据接口已预留，等待中间件接入。`;
+			}
+		}
+
+		typeField.addEventListener('change', syncProblemField);
+		document.getElementById('preview-article').addEventListener('click', renderPreview);
+		contentField.addEventListener('input', () => {
+			if (preview.classList.contains('active')) renderPreview();
+		});
+		form.addEventListener('submit', async event => {
+			event.preventDefault();
+			if (!existingArticleLoaded) {
+				statusNode.className = 'article-error';
+				statusNode.textContent = '文章数据尚未加载，不能覆盖保存';
+				return;
+			}
+			const payload = {
+				title: form.elements.title.value.trim(),
+				type: typeField.value,
+				is_public: form.elements.is_public.value === 'true',
+				problem_id: typeField.value === 'solution' ? Number(form.elements.problem_id.value) : null,
+				content: contentField.value
+			};
+			if (typeField.value === 'solution' && (!Number.isSafeInteger(payload.problem_id) || payload.problem_id < 1)) {
+				statusNode.className = 'article-error';
+				statusNode.textContent = '请填写有效的题目编号';
+				return;
+			}
+			saveButton.disabled = true;
+			statusNode.className = '';
+			statusNode.textContent = '正在保存…';
+			try {
+				const response = await fetch(articleId === null ? '/api/articles' : `/api/articles/${encodeURIComponent(articleId)}`, {
+					method: articleId === null ? 'POST' : 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+				const result = await response.json();
+				if (!response.ok || result.status !== 'Y') throw new Error(result.error || '保存失败');
+				const savedId = articleId === null ? result.id : articleId;
+				window.location.href = `/article/${encodeURIComponent(savedId)}`;
+			} catch (error) {
+				statusNode.className = 'article-error';
+				statusNode.textContent = `${error.message || error}。文章保存接口已预留，等待中间件接入。`;
+				saveButton.disabled = false;
+			}
+		});
+
+		syncProblemField();
+		if (articleId !== null) {
+			saveButton.disabled = true;
+			loadArticleForEdit();
+		}
+	</script>
+</body>
+</html>

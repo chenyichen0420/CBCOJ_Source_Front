@@ -222,8 +222,8 @@ app.use(async (req, res, next) => {
 });
 
 // ---------- 辅助函数 ----------
-const navigation = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a>`;
-const navigationAdmin = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a><a href="/admin">管理后台</a>`;
+const navigation = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/articles">文章广场</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a>`;
+const navigationAdmin = `<a href="/" class="logo"><img src="/favicon.ico" width="20" height="20"> CBCOJ </a><a href="/problem/list">题库</a><a href="/articles">文章广场</a><a href="/discussions">讨论</a><a href="/record/list">评测列表</a><a href="/contests">比赛列表</a><a href="/chat">私信</a><a href="/settings">个人设置</a><a href="/admin">管理后台</a>`;
 
 async function getStatistics() {
 	try {
@@ -494,12 +494,13 @@ app.get('/problem/:id', requireLoginPage, async (req, res) => {
 				problem: hiddenProblem,
 				navigation: nav,
 				user: req.user,
-				canmngproblem
+				canmngproblem,
+				problemSolutions: []
 			});
 		}
 
 		problem.author_meta = await getAuthorMeta(problem.author);
-		res.render('problem', { problem, navigation: nav, user: req.user, canmngproblem });
+		res.render('problem', { problem, navigation: nav, user: req.user, canmngproblem, problemSolutions: [] });
 	} catch (err) {
 		logger.logError(`Problem detail failed for ${id}: ${err.message}`, err);
 		res.status(502).send('题目信息获取失败');
@@ -524,61 +525,53 @@ app.get('/problem/edit/:id', requireLoginPage, requirePermission('can_manage_pro
 	}
 });
 
-/*
-关于文章功能的一些构思：
-
-1. 风险控制，文章的创建于编辑受限制于权限，普通用户不可发布文章；
-2. 文章仍然使用成熟的 md+latex 渲染系统
-3. 文章内容以 utf-8 编码的 base64 存储在中间件当中
-4. 文章元信息仍然使用类似提交记录的定长二进制文件存储
-5. 文章权限可以设置为公开/隐藏，其中公开为登录后可见
-6. 文章**主要**服务于题目题解展示，但是对于一些重要的通知也可以使用
-7. 文章的创建与编辑界面使用类似题目编辑界面的表单，支持 md+latex 的预览
-8. 文章**不提供列表**，类似于云剪贴板，但是题解在题目下单独出现索引
-9. 题目下的单独索引可以直接使用类似 pid 检索提交记录的实现
-*/
-
-// 文章页面
-app.get('/article/:id', requireLoginPage, async (req, res) => {
-	res.status(404).send(JSON.stringify(
-		{
-			status: 'N',
-			"error": "Route not found"
-		}
-	));
-	//not implemented yet
+// 文章广场仅显示“其他”类型文章；列表由文章 API 提供。
+app.get('/articles', requireLoginPage, async (req, res) => {
+	const isAdmin = await checkAdmin(req);
+	res.render('articles', {
+		navigation: isAdmin ? navigationAdmin : navigation,
+		user: req.user,
+		canManageArticles: await checkPermission(req.user.id, 'can_manage_articles'),
+		articles: [],
+		totalPages: 1,
+		articleListError: '文章数据服务尚未接入中间件'
+	});
 });
 
-// 文章编辑界面
-app.get('/article/edit/:id', requireLoginPage, requirePermission('can_manage_articles'), async (req, res) => {
-	res.status(404).send(JSON.stringify(
-		{
-			status: 'N',
-			"error": "Route not found"
-		}
-	));
-	//not implemented yet
-});
-
-// 文章新建界面
 app.get('/article/new', requireLoginPage, requirePermission('can_manage_articles'), async (req, res) => {
-	res.status(404).send(JSON.stringify(
-		{
-			status: 'N',
-			"error": "Route not found"
-		}
-	));
-	//not implemented yet
+	const isAdmin = await checkAdmin(req);
+	res.render('article-edit', {
+		title: '新建文章',
+		navigation: isAdmin ? navigationAdmin : navigation,
+		user: req.user,
+		articleId: null
+	});
 });
 
-app.get('/problem/:id/solution', requireLoginPage, async (req, res) => {
-	res.status(404).send(JSON.stringify(
-		{
-			status: 'N',
-			"error": "Route not found"
-		}
-	));
-	//not implemented yet
+app.get('/article/edit/:id', requireLoginPage, requirePermission('can_manage_articles'), async (req, res) => {
+	const idErr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (idErr) return res.status(400).send('Invalid article id');
+	const isAdmin = await checkAdmin(req);
+	res.render('article-edit', {
+		title: '编辑文章',
+		navigation: isAdmin ? navigationAdmin : navigation,
+		user: req.user,
+		articleId: Number(req.params.id)
+	});
+});
+
+app.get('/article/:id', requireLoginPage, async (req, res) => {
+	const idErr = validateInt(req.params.id, { positive: true, min: 1, max: 2147483647 });
+	if (idErr) return res.status(400).send('Invalid article id');
+	const isAdmin = await checkAdmin(req);
+	res.render('article', {
+		navigation: isAdmin ? navigationAdmin : navigation,
+		user: req.user,
+		articleId: Number(req.params.id),
+		canManageArticles: await checkPermission(req.user.id, 'can_manage_articles'),
+		articleData: null,
+		articleLoadError: '文章数据服务尚未接入中间件'
+	});
 });
 
 // 提交列表
@@ -839,6 +832,7 @@ app.get('/admin', requireLoginPage, async (req, res) => {
 // ---------- API 路由（保持不变） ----------
 app.use('/api', require('./routes/academic'));
 app.use('/api', require('./routes/user'));
+app.use('/api', require('./routes/article'));
 app.use('/api', require('./routes/admin'));
 // app.use('/api', require('./routes/community'));
 // app.use('/api/contests', require('./routes/contest'));

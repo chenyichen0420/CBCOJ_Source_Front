@@ -99,13 +99,12 @@
                     if (now < start) { statusClass = 'status-not-started'; statusText = '未开始'; }
                     else if (now >= start && now <= end) { statusClass = 'status-running'; statusText = '进行中'; }
                     else { statusClass = 'status-ended'; statusText = '已结束'; }
-                    const isRunningOrEnded = now >= start; // 允许提交的条件：比赛已开始
                 %>
                 <div class="contest-info" data-start-time="<%= contest.start_time %>" data-end-time="<%= contest.end_time %>">
                     <div class="contest-title"><%= contest.title %></div>
                     <div class="contest-time">开始: <%= new Date(contest.start_time).toLocaleString() %> | 结束: <%= new Date(contest.end_time).toLocaleString() %></div>
                     <div><span class="contest-status <%= statusClass %>" id="contestStatusBadge"><%= statusText %></span></div>
-                    <div class="contest-description"><script type="text/plain" class="raw-markdown"><%= contest.description || '' %></script></div>
+                    <div class="contest-description"><textarea class="raw-markdown" hidden><%= contest.description || '' %></textarea></div>
                 </div>
 
                 <div class="problem-list">
@@ -133,7 +132,7 @@
                         <tbody id="rankTbody">
                             <% if (rank && rank.length > 0) {
                                 rank.forEach((user, idx) => { %>
-                                    <tr><td><%= idx+1 %></td><td><img src="/api/avatar/<%= encodeURIComponent(user.username) %>" class="avatar"> <%= user.username %></td><td><%= user.solved %></td></tr>
+                                    <tr><td><%= idx+1 %></td><td><img src="/api/avatar/<%= encodeURIComponent(user.username) %>" data-avatar-username="<%= user.username %>" referrerpolicy="no-referrer" class="avatar"> <%= user.username %></td><td><%= user.solved %></td></tr>
                                 <% });
                             } else { %>
                                 <tr><td colspan="3">暂无数据</td></tr>
@@ -175,10 +174,6 @@
 	}
 	});
         const contestId = "<%= contest.id%>";
-        const startTimeStr = "<%= contest.start_time %>";
-        const endTimeStr = "<%= contest.end_time %>";
-        const isRunningOrEnded = <%= isRunningOrEnded %>;
-
         async function refreshRanking() {
             if (!contestId) return;
             try {
@@ -222,5 +217,6 @@
             await refreshRanking();
         });
     </script>
+    <script src="/assets/avatar.js"></script>
 </body>
 </html>

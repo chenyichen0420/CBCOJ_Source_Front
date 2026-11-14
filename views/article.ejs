@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>文章 - CBCOJ</title>
+	<link rel="stylesheet" href="/assets/base.css">
+	<link rel="stylesheet" href="/assets/components.css">
+	<link rel="stylesheet" href="/assets/layout.css">
+	<script src="/assets/marked.min.js"></script>
+	<script src="/assets/purify.min.js"></script>
+	<script src="/assets/katex.min.js"></script>
+	<script src="/assets/auto-render.min.js"></script>
+	<style>
+		.article-layout { grid-template-columns: minmax(0, 2fr) minmax(260px, .75fr); }
+		.article-body { min-height: 220px; overflow-wrap: anywhere; }
+		.article-meta { margin: 0 0 14px; color: var(--text-secondary); }
+		.article-meta dt { margin-top: 12px; color: var(--text-muted); font-size: .85rem; }
+		.article-meta dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+		.article-toc ol { padding-left: 20px; }
+		.article-toc a { display: block; padding: 2px 0; }
+		.article-toc .toc-level-3 { margin-left: 12px; }
+		.article-toc .toc-level-4, .article-toc .toc-level-5, .article-toc .toc-level-6 { margin-left: 24px; }
+		.article-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+		@media (max-width: 900px) { .article-layout { grid-template-columns: 1fr; } }
+	</style>
+</head>
+<body>
+	<nav>
+		<div class="nav-left"><%- navigation %></div>
+		<div class="nav-right">
+			<div class="login-content">
+				<div id="login-area"></div>
+				<div id="login-status">
+					<div class="status-indicator" id="statusIndicator"></div>
+					<span id="statusText">正在检测登录状态...</span>
+				</div>
+			</div>
+		</div>
+	</nav>
+	<main class="page">
+		<div class="container">
+			<div class="content problem-layout article-layout">
+				<article class="left card">
+					<div class="article-actions">
+						<a class="btn" href="/articles">文章广场</a>
+						<a id="article-edit-link" class="btn btn-primary" hidden>编辑文章</a>
+					</div>
+					<h1 id="article-heading">正在加载文章…</h1>
+					<p id="article-load-status" class="text-secondary" role="status"></p>
+					<div id="article-body" class="article-body"></div>
+				</article>
+				<aside class="right card">
+					<h2>文章信息</h2>
+					<dl class="article-meta">
+						<dt>标题</dt><dd id="article-title">—</dd>
+						<dt>类别</dt><dd id="article-type">—</dd>
+						<dt>作者</dt><dd id="article-author">—</dd>
+						<dt>最后更新</dt><dd id="article-updated">—</dd>
+					</dl>
+					<div id="article-problem-info" hidden>
+						<h3>关联题目</h3>
+						<p><a id="article-problem-link"></a></p>
+					</div>
+					<div class="article-toc">
+						<h3>目录</h3>
+						<nav aria-label="文章目录"><ol id="article-toc-list"></ol></nav>
+					</div>
+				</aside>
+			</div>
+			<div id="article-page-data" hidden
+				data-article="<%= JSON.stringify(articleData) %>"
+				data-error="<%= articleLoadError %>"></div>
+		</div>
+	</main>
+	<script src="/assets/checklogin.min.js"></script>
+	<script src="/assets/markdown-renderer.js"></script>
+	<script>
+		const articleId = <%= articleId %>;
+		const canManageArticles = <%- JSON.stringify(canManageArticles) %>;
+		const statusNode = document.getElementById('article-load-status');
+		const typeNames = { solution: '题解', other: '其他' };
+
+		function buildArticleToc(body) {
+			const list = document.getElementById('article-toc-list');
+			list.replaceChildren();
+			const usedIds = new Set();
+			body.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((heading, index) => {
+				const base = heading.textContent.trim().toLowerCase()
+					.replace(/[^\p{L}\p{N}\s-]/gu, '')
+					.replace(/\s+/g, '-').slice(0, 80) || `section-${index + 1}`;
+				let id = base;
+				let suffix = 2;
+				while (usedIds.has(id)) id = `${base}-${suffix++}`;
+				usedIds.add(id);
+				heading.id = id;
+				const item = document.createElement('li');
+				item.className = `toc-level-${heading.tagName.slice(1)}`;
+				const link = document.createElement('a');
+				link.href = `#${id}`;
+				link.textContent = heading.textContent;
+				item.appendChild(link);
+				list.appendChild(item);
+			});
+			if (!list.children.length) {
+				const empty = document.createElement('li');
+				empty.textContent = '暂无目录';
+				list.appendChild(empty);
+			}
+		}
+
+		function loadArticle() {
+			try {
+				const pageData = document.getElementById('article-page-data');
+				const article = JSON.parse(pageData.dataset.article);
+				if (!article) throw new Error(pageData.dataset.error || '文章加载失败');
+				document.title = `${article.title} - CBCOJ`;
+				document.getElementById('article-heading').textContent = article.title;
+				document.getElementById('article-title').textContent = article.title;
+				document.getElementById('article-type').textContent = typeNames[article.type] || '未知';
+				const author = document.getElementById('article-author');
+				const authorLink = document.createElement('a');
+				authorLink.href = `/profile/${encodeURIComponent(article.author.username)}`;
+				authorLink.textContent = article.author.username;
+				author.replaceChildren(authorLink);
+				document.getElementById('article-updated').textContent =
+					article.updated_at ? new Date(article.updated_at).toLocaleString('zh-CN') : '—';
+
+				if (article.type === 'solution' && article.problem_id) {
+					const problemInfo = document.getElementById('article-problem-info');
+					const problemLink = document.getElementById('article-problem-link');
+					problemLink.href = `/problem/${encodeURIComponent(article.problem_id)}`;
+					problemLink.textContent = `${article.problem_id} - ${article.problem_title || '题目'}`;
+					problemInfo.hidden = false;
+				}
+				if (canManageArticles) {
+					const editLink = document.getElementById('article-edit-link');
+					editLink.href = `/article/edit/${encodeURIComponent(article.id)}`;
+					editLink.hidden = false;
+				}
+
+				const body = document.getElementById('article-body');
+				body.innerHTML = renderMarkdownWithMath(article.content || '');
+				if (typeof renderMathInElement !== 'undefined') {
+					renderMathInElement(body, {
+						delimiters: [
+							{ left: '$$', right: '$$', display: true },
+							{ left: '$', right: '$', display: false },
+							{ left: '\\(', right: '\\)', display: false },
+							{ left: '\\[', right: '\\]', display: true }
+						],
+						throwOnError: false
+					});
+				}
+				buildArticleToc(body);
+				statusNode.textContent = '';
+			} catch (error) {
+				document.getElementById('article-heading').textContent = '文章暂不可用';
+				statusNode.textContent = error.message || '文章加载失败';
+			}
+		}
+
+		loadArticle();
+	</script>
+</body>
+</html>

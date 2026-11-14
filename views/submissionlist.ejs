@@ -227,8 +227,8 @@
 								<td><a href="/record/<%= sub.id %>" class="submission-link">#<%= sub.id %></a></td>
 								<td><a href="/problem/<%= sub.problem_id %>" class="submission-link"><%= sub.problem_title %> (<%= sub.problem_id %>)</a></td>
 								<td>
-									<a href="/profile/<%= sub.username %>" class="submission-link" style="color: <%= sub.name_color || (sub.role === 'admin' || sub.role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>">
-										<img src="/api/avatar/<%= encodeURIComponent(sub.username) %>" class="avatar" alt="avatar"> <%= sub.username %>
+									<a href="/profile/<%= sub.username %>" class="submission-link" data-text-color="<%= sub.name_color || (sub.role === 'admin' || sub.role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>">
+										<img src="/api/avatar/<%= encodeURIComponent(sub.username) %>" data-avatar-username="<%= sub.username %>" referrerpolicy="no-referrer" class="avatar" alt="avatar"> <%= sub.username %>
 									</a>
 									<% if (sub.badge) { %>
 										<span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= sub.badge %></span>
@@ -284,5 +284,7 @@
 	</main>
 
 	<script type="text/javascript" src="/assets/checklogin.min.js"></script>
+<script src="/assets/avatar.js"></script>
+<script src="/assets/dynamic-styles.js"></script>
 </body>
 </html>

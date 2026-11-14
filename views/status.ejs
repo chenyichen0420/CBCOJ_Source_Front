@@ -38,7 +38,7 @@
 					<h1>评测结果 - #<%= submission.id %></h1>
 					<div id="record-content">
 						<h3>评测结果</h3>
-						<p style="color: <%= overallCode === 200 ? 'green' : ([202, 206, 408, 413].includes(overallCode) ? 'lightblue' : (overallCode === 403 ? 'yellow' : ([400, 406, 500].includes(overallCode) ? 'red' : (overallCode === 502 ? 'purple' : 'white')))) %>"><%= overallDesc %></p>
+						<p data-text-color="<%= overallCode === 200 ? 'green' : ([202, 206, 408, 413].includes(overallCode) ? 'lightblue' : (overallCode === 403 ? 'yellow' : ([400, 406, 500].includes(overallCode) ? 'red' : (overallCode === 502 ? 'purple' : 'white')))) %>"><%= overallDesc %></p>
 						<p>时间: <%= totalTime %>ms</p>
 						<p>内存: <%= (maxMemory / 1024 / 1024).toFixed(2) %>MB</p>
 						<p>得分: <%= totalScore %></p>
@@ -56,9 +56,9 @@
 													: r.status === 'Wrong Answer' ? 'red'
 														: r.status === 'Rejected' ? 'yellow' : '#fff';
 								%>
-								<div class="testcase-card" style="border-left-color: <%= color %>;">
+								<div class="testcase-card" data-border-left-color="<%= color %>">
 									<div class="testcase-card-header">
-										<span class="testcase-title" style="color: <%= color %>;">子任务 <%= r.test_point_index %>: <%= r.status %></span>
+										<span class="testcase-title" data-text-color="<%= color %>">子任务 <%= r.test_point_index %>: <%= r.status %></span>
 										<span class="testcase-score"><%= r.score %> 分</span>
 									</div>
 									<div class="testcase-details">
@@ -98,14 +98,14 @@
 					<div class="card" id="basic-user-info" style="padding: 10px;">
 						<div id="user"><h3>提交用户</h3>
 							<p>
-								<a href="/profile/<%= submission.username %>" style="color: <%= submission.user_name_color || (submission.user_role === 'admin' || submission.user_role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>"><img src="/api/avatar/<%= encodeURIComponent(submission.username) %>" class="avatar"> <%= submission.username %></a>
+								<a href="/profile/<%= submission.username %>" data-text-color="<%= submission.user_name_color || (submission.user_role === 'admin' || submission.user_role === 'superadmin' ? '#8a2be2' : '#1e90ff') %>"><img src="/api/avatar/<%= encodeURIComponent(submission.username) %>" data-avatar-username="<%= submission.username %>" referrerpolicy="no-referrer" class="avatar"> <%= submission.username %></a>
 								<% if (submission.user_badge) { %>
 									<span class="user-badge" style="background:#333;color:#fff;padding:2px 6px;border-radius:8px;font-size:11px;margin-left:6px;"><%= submission.user_badge %></span>
 								<% } %>
 							</p>
 						</div>
-						<div id="user"><h3>提交时间</h3><p><%= new Date(submission.submit_time).toLocaleString('zh-CN') %></p></div>
-						<div id="user"><h3>提交题目</h3><a href="/problem/<%= submission.problemname %>"><%= submission.problemtitle %></a></div>
+						<div><h3>提交时间</h3><p><%= new Date(submission.submit_time).toLocaleString('zh-CN') %></p></div>
+						<div><h3>提交题目</h3><a href="/problem/<%= submission.problemname %>"><%= submission.problemtitle %></a></div>
 					</div>
 					<div class="card" style="margin-top: 18px; padding: 10px;">
 						<h3>评测结果说明</h3>
@@ -124,5 +124,7 @@
 	</main>
 
 	<script type="text/javascript" src="/assets/checklogin.min.js"></script>
+	<script src="/assets/avatar.js"></script>
+	<script src="/assets/dynamic-styles.js"></script>
 </body>
 </html>

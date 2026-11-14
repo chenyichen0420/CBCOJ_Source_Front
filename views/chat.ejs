@@ -71,6 +71,7 @@
     </main>
 
     <script type="text/javascript" src="/assets/checklogin.min.js"></script>
+    <script src="/assets/avatar.js"></script>
     <script src="/assets/markdown-renderer.js"></script>
     <script>
         let currentTarget = null;
@@ -83,9 +84,24 @@
                 data.conversations.forEach(c => {
                     const el = document.createElement('div');
                     el.className = 'contact-item';
-                    el.innerHTML = `<img src="/api/avatar/${encodeURIComponent(c.username)}" class="avatar"> <div style="flex:1"><strong>${c.username}</strong><div style="font-size:12px;color:var(--text-secondary)">${(c.preview||'').slice(0,60)}</div></div>`;
+                    const avatar = document.createElement('img');
+                    avatar.src = '/api/avatar/' + encodeURIComponent(c.username);
+                    avatar.dataset.avatarUsername = c.username;
+                    avatar.referrerPolicy = 'no-referrer';
+                    avatar.className = 'avatar';
+                    const info = document.createElement('div');
+                    info.style.flex = '1';
+                    const name = document.createElement('strong');
+                    name.textContent = c.username;
+                    const preview = document.createElement('div');
+                    preview.style.fontSize = '12px';
+                    preview.style.color = 'var(--text-secondary)';
+                    preview.textContent = (c.preview || '').slice(0, 60);
+                    info.append(name, preview);
+                    el.append(avatar, info);
                     el.addEventListener('click', () => { openConversation(c.username); });
                     cont.appendChild(el);
+                    window.loadConfiguredAvatar?.(avatar);
                 });
             } else {
                 cont.innerHTML = '<p class="text-secondary">暂无会话</p>';
@@ -107,7 +123,7 @@
                     const bubble = document.createElement('div');
                     bubble.className = 'bubble ' + (isMe ? 'me' : '');
                     bubble.innerHTML = renderMarkdownWithMath(m.content || '');
-                    row.appendChild(isMe ? bubble : (() => { const img = document.createElement('img'); img.src = '/api/avatar/' + encodeURIComponent(m.from); img.className='avatar'; const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.appendChild(img); wrap.appendChild(bubble); return wrap; })());
+                    row.appendChild(isMe ? bubble : (() => { const img = document.createElement('img'); img.src = '/api/avatar/' + encodeURIComponent(m.from); img.dataset.avatarUsername = m.from; img.referrerPolicy = 'no-referrer'; img.className='avatar'; const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.appendChild(img); wrap.appendChild(bubble); window.loadConfiguredAvatar?.(img); return wrap; })());
                     msgs.appendChild(row);
                 });
                 if (typeof renderMathInElement !== 'undefined') renderMathInElement(msgs, { delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}], throwOnError:false });
